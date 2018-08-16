@@ -30,7 +30,7 @@ import {ERBridge} from "../src/ERBridge";
 import {importTestDBDetail} from "./testDB";
 
 describe("ERBridge", () => {
-  const {driver, options} = importTestDBDetail;
+  const { driver, options } = importTestDBDetail;
   const connection = driver.newConnection();
   const erBridge = new ERBridge(connection);
 
@@ -58,7 +58,7 @@ describe("ERBridge", () => {
   });
 
   afterEach(async () => {
-    await connection.dropDatabase();
+    // await connection.dropDatabase();
   });
 
   it("empty entity", async () => {
