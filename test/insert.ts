@@ -1,165 +1,180 @@
 import { AConnection } from "gdmn-db";
 import { ERBridge } from "../src/ERBridge";
 import { ERModel, MAX_16BIT_INT, MIN_16BIT_INT, Entity, IntegerAttribute, StringAttribute, TimeStampAttribute, EntityAttribute, SetAttribute } from "gdmn-orm";
-import { IDatum, Insert } from "../src/crud/insert/Insert";
+import { IDatum, Insert, IInsertData, IEntityInsert, IScalarInsert } from "../src/crud/insert/Insert";
 
 export function insertTest(connection: AConnection): void {
 
   describe("ERBridge INSERT", async () => {
     const erBridge = new ERBridge(connection);
 
-    //it ("insert a few simple scalar attributes", async () => {
-    //   const erModel = ERBridge.completeERModel(new ERModel());
-    //   const entity = ERBridge.addEntityToERModel(erModel, new Entity({
-    //     name: "TEST",
-    //     lName: { ru: { name: "entity name", fullName: "full entity name" } }
-    //   }));
+    it("insert a few simple scalar attributes", async () => {
+      const erModel = ERBridge.completeERModel(new ERModel());
+      const entity = ERBridge.addEntityToERModel(erModel, new Entity({
+        name: "TEST",
+        lName: { ru: { name: "entity name", fullName: "full entity name" } }
+      }));
 
-    //   const integerAttribute = entity.add(new IntegerAttribute({
-    //     name: "FIELD1", lName: { ru: { name: "Поле 1", fullName: "FULLNAME" } }, required: true,
-    //     minValue: MIN_16BIT_INT, maxValue: MAX_16BIT_INT, defaultValue: -10000,
-    //   }));
+      const integerAttribute = entity.add(new IntegerAttribute({
+        name: "FIELD1", lName: { ru: { name: "Поле 1", fullName: "FULLNAME" } }, required: true,
+        minValue: MIN_16BIT_INT, maxValue: MAX_16BIT_INT, defaultValue: -10000,
+      }));
 
-    //   const stringAttribute = entity.add(new StringAttribute({
-    //     name: "FIELD2", lName: { ru: { name: "Поле 2" } },
-    //     minLength: 1, maxLength: 160, defaultValue: "test default", autoTrim: true
-    //   }));
+      const stringAttribute = entity.add(new StringAttribute({
+        name: "FIELD2", lName: { ru: { name: "Поле 2" } },
+        minLength: 1, maxLength: 160, defaultValue: "test default", autoTrim: true
+      }));
 
-    //   await erBridge.importToDatabase(erModel);
+      await erBridge.importToDatabase(erModel);
 
-    //   const datum1: IDatum = {
-    //     attribute: integerAttribute,
-    //     value: 777
-    //   };
+      const datum1: IDatum = {
+        attribute: integerAttribute,
+        value: 777
+      };
 
-    //   const datum2: IDatum = {
-    //     attribute: stringAttribute,
-    //     value: "iamstring"
-    //   };
+      const datum2: IDatum = {
+        attribute: stringAttribute,
+        value: "iamstring"
+      };
 
-    //   await Insert.execute(connection, entity, [datum1, datum2]);
+      const insertData: IInsertData = {
+        entity,
+        datums: [datum1, datum2]
+      };
 
-    //   await AConnection.executeTransaction({
-    //     connection,
-    //     callback: async (transaction) => {
-    //       const result = await connection.executeReturning(transaction,
-    //         `
-    //                 SELECT FIRST 1
-    //                   test.FIELD1,
-    //                   test.FIELD2
-    //                 FROM TEST test
-    //             `);
+      await Insert.execute(connection, insertData);
 
-    //       const insertedNumber = result.getNumber("FIELD1");
-    //       console.log("Inserted number: ", insertedNumber);
-    //       expect(insertedNumber).toEqual(datum1.value);
+      await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const result = await connection.executeReturning(transaction,
+            `
+                    SELECT FIRST 1
+                      test.FIELD1,
+                      test.FIELD2
+                    FROM TEST test
+                `);
 
-    //       const insertedString = result.getString("FIELD2");
-    //       console.log("Inserted string: ", insertedString);
-    //       expect(insertedString).toEqual(datum2.value);
-    //     }
-    //   });
+          const insertedNumber = result.getNumber("FIELD1");
+          console.log("Inserted number: ", insertedNumber);
+          expect(insertedNumber).toEqual(datum1.value);
 
-    // });
+          const insertedString = result.getString("FIELD2");
+          console.log("Inserted string: ", insertedString);
+          expect(insertedString).toEqual(datum2.value);
+        }
+      });
 
-    // it("insert with EntityAttribute", async () => {
-    //   const erModel = ERBridge.completeERModel(new ERModel());
+    });
 
-    //   // APPLICATION
-    //   const appEntity = ERBridge.addEntityToERModel(erModel, new Entity({
-    //     name: "APPLICATION", lName: { ru: { name: "Приложение" } }
-    //   }));
-    //   const appUid = appEntity.add(new StringAttribute({
-    //     name: "UID", lName: { ru: { name: "Идентификатор приложения" } }, required: true, minLength: 1, maxLength: 36
-    //   }));
-    //   appEntity.addUnique([appUid]);
-    //   appEntity.add(new TimeStampAttribute({
-    //     name: "CREATIONDATE", lName: { ru: { name: "Дата создания" } }, required: true, defaultValue: "CURRENT_TIMESTAMP"
-    //   }));
+    it("insert with EntityAttribute", async () => {
+      const erModel = ERBridge.completeERModel(new ERModel());
 
-    //   // APPLICATION_BACKUPS
-    //   const backupEntity = ERBridge.addEntityToERModel(erModel, new Entity({
-    //     name: "APPLICATION_BACKUPS", lName: { ru: { name: "Бэкап" } }
-    //   }));
-    //   const backupUid = backupEntity.add(new StringAttribute({
-    //     name: "UID", lName: { ru: { name: "Идентификатор бэкапа" } }, required: true, minLength: 1, maxLength: 36
-    //   }));
-    //   backupEntity.addUnique([backupUid]);
-    //   const appEntityAttribute = backupEntity.add(new EntityAttribute({
-    //     name: "APP", lName: { ru: { name: "Приложение" } }, required: true, entities: [appEntity]
-    //   }));
-    //   backupEntity.add(new TimeStampAttribute({
-    //     name: "CREATIONDATE", lName: { ru: { name: "Дата создания" } }, required: true, defaultValue: "CURRENT_TIMESTAMP"
-    //   }));
-    //   const backupAlias = backupEntity.add(new StringAttribute({
-    //     name: "ALIAS", lName: { ru: { name: "Название бэкапа" } }, required: true, minLength: 1, maxLength: 120
-    //   }));
+      // APPLICATION
+      const appEntity = ERBridge.addEntityToERModel(erModel, new Entity({
+        name: "APPLICATION", lName: { ru: { name: "Приложение" } }
+      }));
+      const appUid = appEntity.add(new StringAttribute({
+        name: "UID", lName: { ru: { name: "Идентификатор приложения" } }, required: true, minLength: 1, maxLength: 36
+      }));
+      appEntity.addUnique([appUid]);
+      appEntity.add(new TimeStampAttribute({
+        name: "CREATIONDATE", lName: { ru: { name: "Дата создания" } }, required: true, defaultValue: "CURRENT_TIMESTAMP"
+      }));
 
-    //   await erBridge.importToDatabase(erModel);
+      // APPLICATION_BACKUPS
+      const backupEntity = ERBridge.addEntityToERModel(erModel, new Entity({
+        name: "APPLICATION_BACKUPS", lName: { ru: { name: "Бэкап" } }
+      }));
+      const backupUid = backupEntity.add(new StringAttribute({
+        name: "UID", lName: { ru: { name: "Идентификатор бэкапа" } }, required: true, minLength: 1, maxLength: 36
+      }));
+      backupEntity.addUnique([backupUid]);
+      const appEntityAttribute = backupEntity.add(new EntityAttribute({
+        name: "APP", lName: { ru: { name: "Приложение" } }, required: true, entities: [appEntity]
+      }));
+      backupEntity.add(new TimeStampAttribute({
+        name: "CREATIONDATE", lName: { ru: { name: "Дата создания" } }, required: true, defaultValue: "CURRENT_TIMESTAMP"
+      }));
+      const backupAlias = backupEntity.add(new StringAttribute({
+        name: "ALIAS", lName: { ru: { name: "Название бэкапа" } }, required: true, minLength: 1, maxLength: 120
+      }));
 
-    //   console.log("Application Entity: ", appEntity.serialize());
-    //   console.log("Application Entity Primary Key: ", appEntity.pk);
-    //   console.log("AppBackup Entity: ", backupEntity.serialize());
-    //   console.log("After");
+      await erBridge.importToDatabase(erModel);
 
-    //   // create app
-    //   const appUidValue = "superpuperuid";
+      // console.log("Application Entity: ", appEntity.serialize());
+      // console.log("Application Entity Primary Key: ", appEntity.pk);
+      // console.log("AppBackup Entity: ", backupEntity.serialize());
+      // console.log("After");
 
-    //   await Insert.execute(connection, appEntity, [{
-    //     attribute: appUid,
-    //     value: appUidValue
-    //   }]);
+      // create app
+      const appUidValue = "superpuperuid";
+      const appData: IInsertData = {
+        entity: appEntity,
+        datums: [{
+          attribute: appUid,
+          value: appUidValue
+        }]
+      };
+      await Insert.execute(connection, appData);
 
-    //   const appId = await AConnection.executeTransaction({
-    //     connection,
-    //     callback: async (transaction) => {
-    //       const result = await connection.executeReturning(transaction, `
-    //             SELECT FIRST 1
-    //               app.ID
-    //             FROM APPLICATION app
-    //             WHERE app.UID = :appUid
-    // `, { appUid: appUidValue });
+      const appId = await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const result = await connection.executeReturning(transaction, `
+                SELECT FIRST 1
+                  app.ID
+                FROM APPLICATION app
+                WHERE app.UID = :appUid
+    `, { appUid: appUidValue });
 
-    //       return result.getNumber("ID");
-    //     }
-    //   });
+          return result.getNumber("ID");
+        }
+      });
 
-    //   const appIdDatum = {
-    //     attribute: appEntityAttribute,
-    //     value: appId
-    //   };
-    //   const backupUidDatum = {
-    //     attribute: backupUid,
-    //     value: "im-uid",
-    //   };
-    //   const backupAliasDatum = {
-    //     attribute: backupAlias,
-    //     value: "imalias"
-    //   };
-    //   const datums = [backupUidDatum, backupAliasDatum, appIdDatum];
-    //   await Insert.execute(connection, backupEntity, datums);
+      const appIdDatum = {
+        attribute: appEntityAttribute,
+        value: appId
+      };
+      const backupUidDatum = {
+        attribute: backupUid,
+        value: "im-uid",
+      };
+      const backupAliasDatum = {
+        attribute: backupAlias,
+        value: "imalias"
+      };
+      const datums = [backupUidDatum, backupAliasDatum, appIdDatum];
 
-    //   await AConnection.executeTransaction({
-    //     connection,
-    //     callback: async (transaction) => {
-    //       const result = await connection.executeReturning(transaction,
-    //         `
-    //                         SELECT FIRST 1
-    //                           backup.UID,
-    //                           backup.ALIAS
-    //                         FROM APPLICATION_BACKUPS backup
-    //                     `);
+      // TODO:
+      const insertData: IInsertData = {
+        entity: backupEntity,
+        datums
+      };
 
-    //       const uid = result.getString(backupUidDatum.attribute.name);
-    //       console.log("Inserted bkp's uid: ", uid);
-    //       expect(uid).toEqual(backupUidDatum.value);
+      await Insert.execute(connection, insertData);
 
-    //       const alias = result.getString(backupAliasDatum.attribute.name);
-    //       console.log("Inserted bkp's alias: ", alias);
-    //       expect(alias).toEqual(backupAliasDatum.value);
-    //     }
-    //   });
-    // });
+      await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const result = await connection.executeReturning(transaction,
+            `
+                            SELECT FIRST 1
+                              backup.UID,
+                              backup.ALIAS
+                            FROM APPLICATION_BACKUPS backup
+                        `);
+
+          const uid = result.getString(backupUidDatum.attribute.name);
+          console.log("Inserted bkp's uid: ", uid);
+          expect(uid).toEqual(backupUidDatum.value);
+
+          const alias = result.getString(backupAliasDatum.attribute.name);
+          console.log("Inserted bkp's alias: ", alias);
+          expect(alias).toEqual(backupAliasDatum.value);
+        }
+      });
+    });
 
     it("insert with SetAttribute", async () => {
       const erModel = ERBridge.completeERModel(new ERModel());
@@ -199,7 +214,12 @@ export function insertTest(connection: AConnection): void {
           value: "imlogin"
         },
       ];
-      await Insert.execute(connection, userEntity, datums);
+      // await Insert.execute(connection, userEntity, datums);
+      const userInsertData = {
+        entity: userEntity,
+        datums
+      }
+      await Insert.execute(connection);
 
       // input: userEntity, appEntity, application'n datums;
       const appDatums = [

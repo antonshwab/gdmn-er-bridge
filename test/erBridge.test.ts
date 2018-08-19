@@ -58,7 +58,7 @@ describe("ERBridge", () => {
   });
 
   afterEach(async () => {
-    // await connection.dropDatabase();
+    await connection.dropDatabase();
   });
 
   it("empty entity", async () => {
