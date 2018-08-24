@@ -25,8 +25,8 @@
   "homepage": "https://github.com/gsbelarus/gdmn-er-bridge#readme",
   "dependencies": {
     "gdmn-db": "git://github.com/gsbelarus/gdmn-db.git",
-    "gdmn-orm": "../gdmn-orm",
     "gdmn-nlp": "git@github.com:gsbelarus/gdmn-nlp.git",
+    "gdmn-orm": "../gdmn-orm",
     "moment": "^2.22.2"
   },
   "devDependencies": {

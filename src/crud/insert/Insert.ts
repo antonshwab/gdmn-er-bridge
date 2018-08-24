@@ -1,122 +1,227 @@
-import { Entity, Attribute, } from "gdmn-orm";
+import { Entity, SetAttribute, DetailAttribute, IAttributes, IAttribute, Attribute, ScalarAttribute, EntityAttribute, } from "gdmn-orm";
 import { AConnection } from "gdmn-db";
+import { Constants } from "../../ddl/Constants";
 
-// export interface IInsertData {
-//   entity: Entity;
-//   linkedEntity?: Entity;
-//   datums: IDatum[];
-// }
+type Scalar = string | boolean | number | Date | null;
 
-export interface IInsertData {
+interface IValue<AttrType extends Attribute, valueType> {
+  attribute: AttrType;
+  value: valueType;
+}
+
+interface ISetValue extends IValue<SetAttribute, Scalar[]> {
+  setValues: Array<IValue<ScalarAttribute, Scalar>>;
+}
+
+interface IUpdate extends IInsert {
+  pk: any[];
+}
+
+interface IInsertOrUpdate extends IInsert {
+  pk?: any[];
+}
+
+interface IInsert {
   entity: Entity;
-  next?: IInsertData;
-  datums: IDatum[];
+  values: Array<IValue<ScalarAttribute, Scalar>
+  | IValue<EntityAttribute, Scalar[]>
+  | IValue<DetailAttribute, Scalar[][]>
+  | ISetValue>;
 }
 
-export interface IInsertData {
+interface IDelete {
+  pk: any[];
   entity: Entity;
-  datums: IDatum[];
-  linkTo?: {
-    entity: Entity;
-    datums: IDatum[];
-  }
 }
 
-// example for Set Attribute:
+interface IAttributesGroups {
+  scalarGroup: Array<IValue<ScalarAttribute, Scalar>>,
+  entityGroup: Array<IValue<EntityAttribute, Scalar[]>>,
+  detailGroup: Array<IValue<DetailAttribute, Scalar[][]>>,
+  setGroup: Array<ISetValue>
+};
 
-// хочется чтобы appEntity тоже само знало (как userEntity c SetAttribute)
-// о SetAttribute
-
-insertData = {
-  entity: appEntity,
-  linked: [
-    {
-      entity: linkedEntity,
-      datums: //  for crosstable primary keys of linkedEntity and [some attributes]
-    }
-  ]
-}
-
-// Data for inserting application:
-// 1. data for application
-// 2. data for linked Entities (to update cross table):
-//   a. primary keys with values
-//   b. other attributes for cross table
-
-insertData = {
-  entity: appEntity,
-  datums: datums,
-  linkedEntities?: [{       // Inside SQLBuilder get name for cross table
-    entity: userEntity,
-    primaryKeysValues: [id],
-    crossTableAttrValues: ['alias', 'shmalias']
-  }]
-}
-
-export interface IDatum {
-  attribute: Attribute;
-  value: any;
-}
+type Step = { sql: string, params: {} };
 
 class SQLInsertBuilder {
-  private readonly _insertData: IInsertData;
+  // TODO: make batch insert, insertOrUpdate, update, delete (use statement for optimization)
+  // TODO: rename SometingGroup to SomethingAttrs
+  // TODO: refactor building sql and params (make like in set)
+  // TODO: replace reduce with maps where possible
 
-  constructor(insertData: IInsertData) {
-    this._insertData = insertData;
+  private readonly _input: IInsert;
+
+  constructor(input: IInsert) {
+    this._input = input;
   }
 
-  build(): { sql: string, params: {} } {
-    const { entity, next, datums, } = this._insertData;
-    //
+  private _interpolateSQLInsert(tableName: string, valuesNames: any[], valuesPlaces: any[]): string {
+    return `INSERT INTO ${tableName} (${valuesNames}) VALUES (${valuesPlaces})`;
+  }
 
+  private _makeStepsFromGroups(entity: Entity, groups: IAttributesGroups) {
+    const { scalarGroup, entityGroup, detailGroup, setGroup } = groups;
 
-    if (next === undefined) {
-      // Case 1. Only Scalar attribute
-      // Case 2. Only Scalar attribute or Entity attribute
-      const tableName = entity.name;
+    const scalarAndEntityGroup = [...scalarGroup, ...entityGroup];
+    const scalarAndEntityNames = scalarAndEntityGroup.map((v) => v.attribute.name);
+    const scalarAndEntityValuesPlaces = scalarAndEntityNames.map((name) => `:${name}`);
+    const scalarAndEntityParams = scalarAndEntityGroup.reduce((acc, currValue) => {
+      return { ...acc, [currValue.attribute.name]: currValue.value };
+    }, {});
+    const scalarAndEntitySql = this._interpolateSQLInsert(
+      entity.name,
+      scalarAndEntityNames,
+      scalarAndEntityValuesPlaces
+    );
+    const scalarAndEntityStep = { sql: scalarAndEntitySql, params: scalarAndEntityParams };
 
-      const attributesNames = datums.map((d: IDatum) => d.attribute.name);
-      const valuesPlaceholders = attributesNames.map((attr) => `:${attr}`);
-      const values = datums.map((d: IDatum) => d.value);
-      const params = attributesNames.reduce((acc, currName, currIndex) => {
-        return { ...acc, [currName]: values[currIndex] };
+    // setGroup
+    // Action: insert to crossTable
+    // Need crossTableName, key1 (ownerId), key2(refId), [...rest attributes]
+
+    const setSteps = setGroup.map((currSet) => {
+      const { attribute, setValues } = currSet;
+
+      // make params
+      const restCrossTableAttrsParams = setValues.reduce((acc, currValue) => {
+        return { ...acc, [currValue.attribute.name]: currValue.value };
       }, {});
-      const sql = `
-        INSERT INTO ${tableName} (${attributesNames})
-        VALUES (${valuesPlaceholders})`;
-      console.log("sql: ", sql);
-      console.log("params: ", params);
-      return { sql, params };
+      const crossPKOwnValue = `(SELECT FIRST 1 ID FROM ${entity.name} ORDER BY ID DESC)`;
+      const [crossPKRefValue] = currSet.value;
+      const params = {
+        [Constants.DEFAULT_CROSS_PK_OWN_NAME]: crossPKOwnValue,
+        [Constants.DEFAULT_CROSS_PK_REF_NAME]: crossPKRefValue,
+        ...restCrossTableAttrsParams
+      };
 
-    } else {
-      // Cases: SetAttribute | DetailAttribute
-      return { sql: " ", params: {} };
-    }
+      // make sql
+      const crossTableAttrsNames = Object.keys(params);
+      const crossTableAttrsValuesPlaces = crossTableAttrsNames.map((name) => `:${name}`);
+      const crossTableName = attribute.adapter ? attribute.adapter!.crossRelation : attribute.name;
+      const sql = this._interpolateSQLInsert(crossTableName, crossTableAttrsNames, crossTableAttrsValuesPlaces);
+
+      const step: Step = { sql, params };
+      return step;
+    });
+
+    // detailSteps
+    //
+    const detailSteps = detailGroup.map((currDetail) => {
+      const { attribute, value } = currDetail;
+      const defaultMasterLinks = [{
+        detailRelation: attribute.name,
+        link2masterField: Constants.DEFAULT_MASTER_KEY_NAME
+      }];
+      const { detailRelation, link2masterField } = attribute.adapter ? attribute.adapter!.masterLinks : defaultMasterLinks;
+
+
+
+
+
+    });
+
+
+    return [scalarAndEntityStep, ...setSteps, ...detailSteps];
   }
+
+  build(): Step[] {
+    const { entity, values } = this._input;
+
+    const groupsAcc: IAttributesGroups = {
+      scalarGroup: [],
+      entityGroup: [],
+      detailGroup: [],
+      setGroup: []
+    };
+
+    const groups = values.reduce((acc: IAttributesGroups, currValue) => {
+      if (ScalarAttribute.isType(currValue.attribute)) {
+        const newScalarGroup = [...acc.scalarGroup, currValue as IValue<ScalarAttribute, Scalar>];
+        return {
+          ...acc,
+          scalarGroup: newScalarGroup
+        };
+      }
+
+      if (EntityAttribute.isType(currValue.attribute)) {
+        const newEntityGroup = [...acc.entityGroup, currValue as IValue<EntityAttribute, Scalar[]>];
+        return {
+          ...acc,
+          entityGroup: newEntityGroup
+        };
+      }
+
+      if (DetailAttribute.isType(currValue.attribute)) {
+        const newDetailGroup = [...acc.detailGroup, currValue as IValue<DetailAttribute, Scalar[][]>];
+        return {
+          ...acc,
+          detailGroup: newDetailGroup
+        };
+      }
+
+      if (SetAttribute.isType(currValue.attribute)) {
+        const newSetAttribute = [...acc.setGroup, currValue as ISetValue];
+        return {
+          ...acc,
+          setGroup: newSetAttribute
+        };
+      }
+
+      throw new Error("Unknow attribute type");
+
+    }, groupsAcc);
+
+    console.log(groupsAcc);
+
+    const steps = this._makeStepsFromGroups(entity, groups);
+
+    return steps;
+  }
+
 }
 
-export abstract class Insert {
-  // 1. add (with datums) app to applications. Returning ID
-  // 2. get crosstable name from entityWithSetAttribute.adapter.name
-  // 3. get ID from user
-  // 4. add to crossTable KEY1 = userID, KEY2 = appID, ALIAS =
+export abstract class Crud {
 
-  public static async execute(
+  public static async executeInsert(
     connection: AConnection,
-    insertData: IInsertData): Promise<void> {
+    input: IInsert
+  ): Promise<void> {
 
-    const { sql, params, } = new SQLInsertBuilder(insertData).build();
+    const steps = new SQLInsertBuilder(input).build();
 
     await AConnection.executeTransaction({
       connection,
       callback: async (transaction) => {
-        await connection.execute(
-          transaction,
-          sql,
-          params
-        );
+        for (const { sql, params } of steps) {
+          await connection.execute(
+            transaction,
+            sql,
+            params
+          );
+        }
       }
     });
   }
+
+  // public static async executeUpdate(
+  //   connection: AConnection,
+  //   input: IUpdate
+  // ): Promise<void> {
+
+  // }
+
+  // public static async executeInsertOrUpdate(
+  //   connection: AConnection,
+  //   input: IInsertOrUpdate
+  // ): Promise<void> {
+
+  // }
+
+  // public static async executeDelete(
+  //   connection: AConnection,
+  //   input: IDelete
+  // ): Promise<void> {
+
+  // }
 
 }
