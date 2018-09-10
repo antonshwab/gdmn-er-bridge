@@ -13,7 +13,6 @@ export function buildInsertSteps(input: IInsert): Step[] {
   const setsSteps = makeSetsSteps(entity, sets);
   const detailsSteps = makeDetailsSteps(entity, details);
 
-  // const steps = [...scalarsEntitiesSteps, ...setsSteps];
   const steps = [...scalarsEntitiesSteps, ...setsSteps, ...detailsSteps];
   console.log("Insert steps: ", steps);
   return steps;
@@ -102,6 +101,7 @@ function makeDetailsSteps(entity: Entity,
     const pKeysNames = pKeysAttributes.map((k) => k.name);
     const pKeysValuesGroups = currDetail.value;
     const pKeysParts = pKeysValuesGroups.map((pkValues, groupIndex) => {
+
       const sqlPart = pKeysNames
         .map((name) => `${name} = :${name}${groupIndex}`)
         .join(" AND ");

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const Constants_1 = require("../ddl/Constants");
 const common_1 = require("./common");
+const Update_1 = require("./Update");
 function makeUpdateOrInsertSQL(tableName, attrsNames, placeholders) {
     const attrsNamesString = attrsNames.join(", ");
     const placeholdersString = placeholders.join(", ");
@@ -67,10 +68,11 @@ function buildUpdateOrInsertSteps(input) {
     if (pk === undefined) {
         throw new Error("For undefined pk not implemented");
     }
-    const { scalars, entities, sets } = common_1.groupAttrsByType(values);
+    const { scalars, entities, sets, details } = common_1.groupAttrsByType(values);
     const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars, entities);
+    const detailsSteps = Update_1.makeDetailsSteps(pk, details);
     const setsSteps = makeSetsSteps(pk, sets);
-    const steps = [...scalarsEntitiesSteps, ...setsSteps];
+    const steps = [...scalarsEntitiesSteps, ...setsSteps, ...detailsSteps];
     console.log("steps for updateOrInsert: ", steps);
     return steps;
 }

@@ -1,5 +1,5 @@
-import { Step, IUpdate, ISetValue } from "./Crud";
-import { Entity } from "gdmn-orm";
+import { Step, IUpdate, ISetValue, IValue, Scalar } from "./Crud";
+import { Entity, DetailAttribute } from "gdmn-orm";
 import { groupAttrsByType } from "./Common";
 import { Constants } from "../ddl/Constants";
 
@@ -7,12 +7,12 @@ import { Constants } from "../ddl/Constants";
 export function buildUpdateSteps(input: IUpdate): Step[] {
   const { pk, entity, values } = input;
 
-  const { scalars, entities, sets } = groupAttrsByType(values);
+  const { scalars, entities, sets, details } = groupAttrsByType(values);
   const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars,
     entities);
-
   const setsSteps = makeSetsSteps(pk, sets);
-  const steps = [...scalarsEntitiesSteps, ...setsSteps];
+  const detailsSteps = makeDetailsSteps(pk, details);
+  const steps = [...scalarsEntitiesSteps, ...setsSteps, ...detailsSteps];
 
   console.log("steps for update :", steps);
   return steps;
@@ -90,4 +90,49 @@ function makeSetsSteps(pk: any[], sets: ISetValue[]): Step[] {
   });
 
   return steps;
+}
+
+export function makeDetailsSteps(pk: any[],
+  details: IValue<DetailAttribute, Scalar[][]>[]): Step[] {
+
+  const detailsSteps = details.map(currDetail => {
+
+    const detailRelation = currDetail.attribute.adapter ? currDetail.attribute.adapter.masterLinks[0].detailRelation :
+      currDetail.attribute.name;
+
+    const link2masterField = currDetail.attribute.adapter ?
+      currDetail.attribute.adapter.masterLinks[0].link2masterField :
+      Constants.DEFAULT_MASTER_KEY_NAME;
+
+    const [detailEntity] = currDetail.attribute.entities;
+    const pKeysAttributes = detailEntity.pk;
+    const pKeysNames = pKeysAttributes.map(key => key.name);
+
+    const pKeysValuesGroups = currDetail.value;
+    const parts = pKeysValuesGroups.map((pkValues, groupIndex) => {
+
+      const sql = pKeysNames
+        .map(name => `${name} = :${name}${groupIndex}`)
+        .join(" AND ");
+
+      const params = pKeysNames.reduce((acc, currName, currIndex) => {
+        return { ...acc, [`${currName}${groupIndex}`]: pkValues[currIndex] };
+      }, {});
+
+      return { sql, params };
+    });
+
+    const whereSQL = parts.map(part => part.sql).join(" OR ");
+    const whereParams = parts.reduce((acc, currPart) => {
+      return { ...acc, ...currPart.params };
+    }, {});
+
+    const [masterId] = pk;
+    const sql = `UPDATE ${detailRelation} SET ${link2masterField} = ${masterId} WHERE ${whereSQL}`;
+    const step = { sql, params: whereParams };
+    return step;
+  });
+
+  console.log("details steps: (update)", detailsSteps);
+  return detailsSteps;
 }

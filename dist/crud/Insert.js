@@ -8,7 +8,6 @@ function buildInsertSteps(input) {
     const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, scalars, entities);
     const setsSteps = makeSetsSteps(entity, sets);
     const detailsSteps = makeDetailsSteps(entity, details);
-    // const steps = [...scalarsEntitiesSteps, ...setsSteps];
     const steps = [...scalarsEntitiesSteps, ...setsSteps, ...detailsSteps];
     console.log("Insert steps: ", steps);
     return steps;

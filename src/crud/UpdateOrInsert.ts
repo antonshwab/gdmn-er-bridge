@@ -2,6 +2,7 @@ import { Constants } from "../ddl/Constants";
 import { ISetValue, Step, IUpdateOrInsert } from "./Crud";
 import { Entity } from "gdmn-orm";
 import { groupAttrsByType } from "./common";
+import { makeDetailsSteps } from "./Update";
 
 function makeUpdateOrInsertSQL(
   tableName: string,
@@ -94,12 +95,13 @@ export function buildUpdateOrInsertSteps(input: IUpdateOrInsert) {
     throw new Error("For undefined pk not implemented");
   }
 
-  const { scalars, entities, sets } = groupAttrsByType(values);
+  const { scalars, entities, sets, details } = groupAttrsByType(values);
   const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars,
     entities);
+  const detailsSteps = makeDetailsSteps(pk, details);
 
   const setsSteps = makeSetsSteps(pk, sets);
-  const steps = [...scalarsEntitiesSteps, ...setsSteps];
+  const steps = [...scalarsEntitiesSteps, ...setsSteps, ...detailsSteps];
 
   console.log("steps for updateOrInsert: ", steps);
 
