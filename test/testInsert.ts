@@ -316,68 +316,131 @@ export function testInsert(
       });
     });
 
-    // it("insert with DetailAttriubute", async () => {
-    //   const erModel: ERModel = await initERModelBuilder(async (builder) => {
-    //     const erModel = await builder.initERModel();
+    it("insert with DetailAttriubute", async () => {
+      const erModel: ERModel = await initERModelBuilder(async (builder) => {
+        const erModel = await builder.initERModel();
 
-    //     const placeEntity = await builder.addEntity(erModel, new Entity({ name: "PLACE", lName: { ru: { name: "Место" } } }));
-    //     await builder.entityBuilder.addAttribute(placeEntity, new StringAttribute({
-    //       name: "ADDRESS", lName: { ru: { name: "Адрес" } }
-    //     }));
+        const placeEntity = await builder.addEntity(erModel, new Entity({ name: "PLACE", lName: { ru: { name: "Место" } } }));
+        await builder.entityBuilder.addAttribute(placeEntity, new StringAttribute({
+          name: "ADDRESS", lName: { ru: { name: "Адрес" } }
+        }));
 
-    //     const userEntity = await builder.addEntity(erModel, new Entity({ name: "USER_ENTITY", lName: { ru: { name: "Пользователь" } } }));
+        const userEntity = await builder.addEntity(erModel, new Entity({ name: "USER_ENTITY", lName: { ru: { name: "Пользователь" } } }));
 
-    //     await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
-    //       name: "NAME", lName: { ru: { name: "Имя пользователя" } }, required: true,
-    //       minLength: 1, maxLength: 36
-    //     }));
-    //     await builder.entityBuilder.addUnique(userEntity, [userEntity.attribute("NAME")]);
+        await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
+          name: "NAME", lName: { ru: { name: "Имя пользователя" } }, required: true,
+          minLength: 1, maxLength: 36
+        }));
+        await builder.entityBuilder.addUnique(userEntity, [userEntity.attribute("NAME")]);
 
-    //     await builder.entityBuilder.addAttribute(userEntity, new EntityAttribute({ name: "PLACE", lName: {}, entities: [placeEntity] }));
+        await builder.entityBuilder.addAttribute(userEntity, new EntityAttribute({ name: "PLACE", lName: {}, entities: [placeEntity] }));
 
-    //     await builder.entityBuilder.addAttribute(userEntity, new DetailAttribute({
-    //       name: "DETAIL_PLACE", lName: { ru: { name: "Детальное место" } }, required: true, entities: [placeEntity], adapter: {
-    //         masterLinks: [{
-    //           detailRelation: placeEntity.name,
-    //           link2masterField: "MASTER_KEY"
-    //         }]
-    //       }
-    //     }));
+        await builder.entityBuilder.addAttribute(userEntity, new DetailAttribute({
+          name: "DETAIL_PLACE", lName: { ru: { name: "Детальное место" } }, required: false, entities: [placeEntity], adapter: {
+            masterLinks: [{
+              detailRelation: placeEntity.name,
+              link2masterField: "MASTER_KEY"
+            }]
+          }
+        }));
 
-    //     return erModel;
-    //   });
+        return erModel;
+      });
 
-    //   const placeEntity = erModel.entity("PLACE");
-    //   const placeAddressAttribute = placeEntity.attribute("ADDRESS");
+      const placeEntity = erModel.entity("PLACE");
+      const placeAddressAttribute = placeEntity.attribute("ADDRESS");
 
-    //   const placeAddressValue1: IValue<ScalarAttribute, Scalar> = {
-    //     attribute: placeAddressAttribute,
-    //     value: "address1"
-    //   };
+      const placeAddressValue1: IValue<ScalarAttribute, Scalar> = {
+        attribute: placeAddressAttribute,
+        value: "address1"
+      };
+      const placeInsert1: IInsert = {
+        entity: placeEntity,
+        values: [placeAddressValue1]
+      };
+      // TODO: executeInsert returning insertedID
+      await Crud.executeInsert(connection, placeInsert1);
+      const place1ID = await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const sql = `SELECT FIRST 1 ID FROM PLACE WHERE ADDRESS = :address`;
+          const params = { address: placeAddressValue1.value };
+          const result = await connection.executeReturning(transaction, sql, params);
+          return result.getNumber("ID");
+        }
+      });
 
-    //   // console.log(placeEntity.attributes);
-    //   // const placeMasterKeyAttribute = placeEntity.attribute("MASTER_KEY");
-    //   // const placeMasterKeyValue: IValue<ScalarAttribute, Scalar> = {
-    //   //   attribute: placeMasterKeyAttribute,
-    //   //   value: 0
-    //   // };
+      const placeAddressValue2: IValue<ScalarAttribute, Scalar> = {
+        attribute: placeAddressAttribute,
+        value: "address2"
+      };
+      const placeInsert2: IInsert = {
+        entity: placeEntity,
+        values: [placeAddressValue2]
+      };
+      await Crud.executeInsert(connection, placeInsert2);
+      const place2ID = await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const sql = `SELECT FIRST 1 ID FROM PLACE WHERE ADDRESS = :address`;
+          const params = { address: placeAddressValue2.value };
+          const result = await connection.executeReturning(transaction, sql, params);
+          return result.getNumber("ID");
+        }
+      });
 
-    //   const placeInsert1: IInsert = {
-    //     entity: placeEntity,
-    //     values: [placeAddressValue1]
-    //   };
-    //   await Crud.executeInsert(connection, placeInsert1);
+      const userEntity = erModel.entity("USER_ENTITY");
+      const userNameAttr = userEntity.attribute("NAME");
+      const userNameValue: IValue<ScalarAttribute, Scalar> = {
+        attribute: userNameAttr,
+        value: "username"
+      };
 
-    //   const placeAddressValue2: IValue<ScalarAttribute, Scalar> = {
-    //     attribute: placeAddressAttribute,
-    //     value: "address2"
-    //   };
-    //   const placeInsert2: IInsert = {
-    //     entity: placeEntity,
-    //     values: [placeAddressValue2]
-    //   };
-    //   await Crud.executeInsert(connection, placeInsert2);
-    // });
+      const detailPlaceAttr = userEntity.attribute("DETAIL_PLACE") as DetailAttribute;
+      const placeValue: IValue<DetailAttribute, Scalar[][]> = {
+        attribute: detailPlaceAttr,
+        value: [[place1ID], [place2ID]]
+      };
+
+      const userInsert: IInsert = {
+        entity: userEntity,
+        values: [userNameValue, placeValue]
+      };
+
+      await Crud.executeInsert(connection, userInsert);
+      const userID = await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const sql = `SELECT FIRST 1 ID FROM ${userEntity.name} ORDER BY ID DESC`;
+          const result = await connection.executeReturning(transaction, sql);
+          return result.getNumber("ID");
+        }
+      });
+
+      await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const insertedUserSQL = `SELECT FIRST 1 * FROM ${userEntity.name} ORDER BY ID DESC`;
+
+          const userResult = await connection.executeReturning(transaction, insertedUserSQL);
+          const insertedUsername = userResult.getString("NAME");
+          expect(insertedUsername).toEqual(userNameValue.value);
+        }
+      });
+
+      await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const sql = `SELECT * FROM ${placeEntity.name} WHERE MASTER_KEY = ${userID}`;
+          const userResult = await connection.executeQuery(transaction, sql);
+          while (await userResult.next()) {
+            expect(userResult.getNumber("MASTER_KEY")).toEqual(userID);
+          }
+          await userResult.close();
+        }
+      });
+
+    });
 
   });
 }

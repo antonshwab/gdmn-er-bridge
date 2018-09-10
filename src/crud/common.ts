@@ -10,6 +10,7 @@ export function groupAttrsByType(values: Values) {
   };
 
   return values.reduce((acc: IAttributesByType, currValue) => {
+
     if (ScalarAttribute.isType(currValue.attribute)) {
       const scalars = [...acc.scalars, currValue as IValue<ScalarAttribute, Scalar>];
       return {
