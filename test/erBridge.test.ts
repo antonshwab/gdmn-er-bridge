@@ -31,6 +31,7 @@ import { importTestDBDetail } from "./testDB";
 import { testInsert } from "./testInsert";
 import { testUpdateOrInsert } from "./testUpdateOrInsert";
 import { testUpdate } from "./testUpdate";
+import { testDelete } from "./testDelete";
 
 describe("ERBridge", () => {
   const { driver, options } = importTestDBDetail;
@@ -67,6 +68,7 @@ describe("ERBridge", () => {
   testInsert(connection, initERModelBuilder);
   testUpdateOrInsert(connection, initERModelBuilder);
   testUpdate(connection, initERModelBuilder);
+  testDelete(connection, initERModelBuilder);
 
   // it("empty entity", async () => {
   //   const erModel = await initERModelBuilder(async (builder) => {

@@ -38,4 +38,5 @@ export declare abstract class Crud {
     static executeInsert(connection: AConnection, input: IInsert): Promise<void>;
     static executeUpdateOrInsert(connection: AConnection, input: IUpdateOrInsert): Promise<void>;
     static executeUpdate(connection: AConnection, input: IUpdate): Promise<void>;
+    static executeDelete(connection: AConnection, input: IDelete): Promise<void>;
 }

@@ -4,6 +4,7 @@ const gdmn_db_1 = require("gdmn-db");
 const UpdateOrInsert_1 = require("./UpdateOrInsert");
 const Update_1 = require("./Update");
 const Insert_1 = require("./Insert");
+const Delete_1 = require("./Delete");
 ;
 class Crud {
     static async run(connection, steps) {
@@ -26,6 +27,10 @@ class Crud {
     }
     static async executeUpdate(connection, input) {
         const steps = Update_1.buildUpdateSteps(input);
+        await this.run(connection, steps);
+    }
+    static async executeDelete(connection, input) {
+        const steps = Delete_1.buildDeleteSteps(input);
         await this.run(connection, steps);
     }
 }

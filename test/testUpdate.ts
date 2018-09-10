@@ -300,7 +300,148 @@ export function testUpdate(connection: AConnection, initERModelBuilder): void {
 
     });
 
+    it("Update SetsAttributes", async () => {
+      const erModel: ERModel = await initERModelBuilder(async (builder) => {
+        const erModel = await builder.initERModel();
+        const appEntity = await builder.addEntity(erModel, new Entity({
+          name: "APPLICATION", lName: { ru: { name: "Приложение" } }
+        }));
 
+        await builder.entityBuilder.addAttribute(appEntity, new StringAttribute({
+          name: "UID", lName: { ru: { name: "Идентификатор приложения" } }, required: true,
+          minLength: 1, maxLength: 36
+        }));
+        await builder.entityBuilder.addUnique(appEntity, [appEntity.attribute("UID")]);
+
+        await builder.entityBuilder.addAttribute(appEntity, new TimeStampAttribute({
+          name: "CREATIONDATE", lName: { ru: { name: "Дата создания" } }, required: true, defaultValue: "CURRENT_TIMESTAMP"
+        }));
+
+        const userEntity = await builder.addEntity(erModel, new Entity({
+          name: "APP_USER", lName: { ru: { name: "Пользователь" } }
+        }));
+
+        const userLogin = await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
+          name: "LOGIN", lName: { ru: { name: "Логин" } }, required: true, minLength: 1,
+          maxLength: 32
+        }));
+
+        const appSet = new SetAttribute({
+          name: "APPLICATIONS", lName: { ru: { name: "Приложения" } }, entities: [appEntity],
+          adapter: { crossRelation: "APP_USER_APPLICATIONS" }
+        });
+
+        appSet.add(new StringAttribute({
+          name: "ALIAS", lName: { ru: { name: "Название приложения" } }, required: true, minLength: 1, maxLength: 120
+        }));
+
+        await builder.entityBuilder.addAttribute(userEntity, appSet);
+
+        return erModel;
+      });
+
+      const userEntity = erModel.entity("APP_USER");
+      const appEntity = erModel.entity("APPLICATION");
+
+      const appUIDValue: IValue<ScalarAttribute, Scalar> = {
+        attribute: appEntity.attribute("UID"),
+        value: "uniqueUID"
+      };
+      const appInsert: IInsert = {
+        entity: appEntity,
+        values: [appUIDValue]
+      };
+      await Crud.executeInsert(connection, appInsert);
+
+      const appId = await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const sql = `SELECT FIRST 1 ID FROM APPLICATION WHERE UID = :appUID`;
+          const params = { appUID: appUIDValue.value };
+          const result = await connection.executeReturning(transaction, sql, params);
+          return result.getNumber("ID");
+        }
+      });
+
+      const appSetAttribute: SetAttribute = userEntity.attribute("APPLICATIONS") as SetAttribute;
+      const appAliasAttribute: ScalarAttribute = appSetAttribute.attribute("ALIAS");
+      const appAliasValue: IValue<ScalarAttribute, Scalar> = {
+        attribute: appAliasAttribute,
+        value: "appAlias"
+      };
+      const loginAttributeValue: IValue<ScalarAttribute, Scalar> = {
+        attribute: userEntity.attribute("LOGIN"),
+        value: "imLogin"
+      };
+      const appSetValue: ISetValue = {
+        attribute: appSetAttribute,
+        setValues: [appAliasValue],
+        value: [appId]
+      };
+      const userInsert: IInsert = {
+        entity: userEntity,
+        values: [loginAttributeValue, appSetValue]
+      };
+      await Crud.executeInsert(connection, userInsert);
+
+      const userID = await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const sql = `SELECT FIRST 1 ID FROM APP_USER WHERE LOGIN = :login`;
+          const params = { login: loginAttributeValue.value };
+          const result = await connection.executeReturning(transaction, sql, params);
+          return result.getNumber("ID");
+        }
+      });
+
+      const newLoginAttributeValue: IValue<ScalarAttribute, Scalar> = {
+        attribute: userEntity.attribute("LOGIN"),
+        value: "imNewLogin"
+      };
+      // TODO:
+      // when pk more than just id ???
+      // for example: primary keys for user must be [id, login]
+      const newAppAliasValue: IValue<ScalarAttribute, Scalar> = {
+        attribute: appAliasAttribute,
+        value: "newAppAlias"
+      };
+      const newAppSetValue: ISetValue = {
+        attribute: appSetAttribute,
+        setValues: [newAppAliasValue],
+        value: [appId]
+      };
+      const userUpdate: IUpdate = {
+        pk: [userID],
+        entity: userEntity,
+        values: [newLoginAttributeValue, newAppSetValue]
+      };
+      await Crud.executeUpdate(connection, userUpdate);
+
+      await AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
+          const sql = `SELECT FIRST 1 * FROM ${userEntity.name} ORDER BY ID DESC`;
+          const params = { login: loginAttributeValue.value };
+          const userResult = await connection.executeReturning(
+            transaction, sql, params);
+          const userID = userResult.getNumber("ID");
+          const userLogin = userResult.getString("LOGIN");
+          expect(userLogin).toEqual(newLoginAttributeValue.value);
+
+          const crossRelation = appSetAttribute.adapter.crossRelation;
+          const crossSQL = `SELECT FIRST 1 * FROM ${crossRelation} where ${Constants.DEFAULT_CROSS_PK_OWN_NAME} = ${userID}`;
+          const crossResult = await connection.executeReturning(transaction, crossSQL);
+
+          const crossOwnKeyValue = crossResult.getNumber(Constants.DEFAULT_CROSS_PK_OWN_NAME);
+          expect(crossOwnKeyValue).toEqual(userID);
+          const crossRefKeyValue = crossResult.getNumber(Constants.DEFAULT_CROSS_PK_REF_NAME);
+          expect(crossRefKeyValue).toEqual(appId);
+          const crossAliasValue = crossResult.getString(appAliasValue.attribute.name);
+          expect(crossAliasValue).toEqual(newAppAliasValue.value);
+        }
+      });
+
+    });
 
   });
 }

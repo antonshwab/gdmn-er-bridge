@@ -3,6 +3,7 @@ import { AConnection } from "gdmn-db";
 import { buildUpdateOrInsertSteps } from "./UpdateOrInsert";
 import { buildUpdateSteps } from "./Update";
 import { buildInsertSteps } from "./Insert";
+import { buildDeleteSteps } from "./Delete";
 
 export type Scalar = string | boolean | number | Date | null;
 
@@ -91,11 +92,12 @@ export abstract class Crud {
     await this.run(connection, steps);
   }
 
-  // public static async executeDelete(
-  //   connection: AConnection,
-  //   input: IDelete
-  // ): Promise<void> {
+  public static async executeDelete(
+    connection: AConnection,
+    input: IDelete
+  ): Promise<void> {
 
-  // }
-
+    const steps = buildDeleteSteps(input);
+    await this.run(connection, steps);
+  }
 }

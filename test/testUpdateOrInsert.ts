@@ -161,41 +161,6 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
 
     it("UpdateOrInsert SetsAttributes", async () => {
       const erModel: ERModel = await initERModelBuilder(async (builder) => {
-        // const erModel = await builder.initERModel();
-
-        // const appEntity = await builder.addEntity(erModel, new Entity({
-        //   name: "APPLICATION", lName: { ru: { name: "Приложение" } }
-        // }));
-        // await builder.entityBuilder.addAttribute(appEntity, new StringAttribute({
-        //   name: "UID", lName: { ru: { name: "Идентификатор приложения" } }, required: true,
-        //   minLength: 1, maxLength: 36
-        // }));
-        // await builder.entityBuilder.addUnique(appEntity, [appEntity.attribute("UID")]);
-        // await builder.entityBuilder.addUnique(appEntity, new TimeStampAttribute({
-        //   name: "CREATIONDATE", lName: { ru: { name: "Дата создания" } }, required: true,
-        //   defaultValue: "CURRENT_TIMESTAMP"
-        // }));
-
-        // const userEntity = await builder.addEntity(erModel, new Entity({
-        //   name: "APP_USER", lName: { ru: { name: "Пользователь" } }
-        // }));
-
-        // const userLogin = await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
-        //   name: "LOGIN", lName: { ru: { name: "Логин" } }, required: true, minLength: 1,
-        //   maxLength: 32
-        // }));
-
-        // const appSet = new SetAttribute({
-        //   name: "APPLICATIONS", lName: { ru: { name: "Приложения" } }, entities: [appEntity],
-        //   adapter: { crossRelation: "APP_USER_APPLICATIONS" }
-        // });
-        // appSet.add(new StringAttribute({
-        //   name: "ALIAS", lName: { ru: { name: "Название приложения" } }, required: true, minLength: 1, maxLength: 120
-        // }));
-
-        // await builder.entityBuilder.addAttribute(userEntity, appSet);
-        // return erModel;
-
         const erModel = await builder.initERModel();
 
         // APPLICATION
