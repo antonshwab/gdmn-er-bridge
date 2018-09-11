@@ -1,9 +1,6 @@
 import { Step, IDelete } from "./Crud";
-import { SetAttribute } from "gdmn-orm";
+import { SetAttribute, DetailAttribute } from "gdmn-orm";
 import { Constants } from "../ddl/Constants";
-
-// why delete in crosstable need make by hands?
-// why not cascade delete?
 
 export function buildDeleteSteps(input: IDelete): Step[] {
   const { pk, entity } = input;
@@ -24,8 +21,8 @@ export function buildDeleteSteps(input: IDelete): Step[] {
 
   const attributesNames = Object.keys(entity.attributes);
   const attributes = attributesNames.map(name => entity.attribute(name));
-  const setAttrs = attributes.filter(attr => SetAttribute.isType(attr));
 
+  const setAttrs = attributes.filter(attr => SetAttribute.isType(attr));
   const cascadeSetSteps = setAttrs.map((currSetAttr) => {
 
     const crossTableName = currSetAttr.adapter ? currSetAttr.adapter!.crossRelation : currSetAttr.name;
@@ -39,7 +36,29 @@ export function buildDeleteSteps(input: IDelete): Step[] {
     return { sql, params };
   });
 
-  const steps = [...cascadeSetSteps, mainStep];
+  const detailAttrs = attributes.filter(attr => DetailAttribute.isType(attr)) as DetailAttribute[];
+  const cascadeDetailSteps = detailAttrs.map((currDetailAttr: DetailAttribute) => {
+
+    const [detailEntity] = currDetailAttr.entities;
+    const detailRelation = currDetailAttr.adapter ?
+      currDetailAttr.adapter.masterLinks[0].detailRelation :
+      detailEntity.name;
+
+    const link2masterField = currDetailAttr.adapter ?
+      currDetailAttr.adapter.masterLinks[0].link2masterField :
+      Constants.DEFAULT_MASTER_KEY_NAME;
+
+    const wherePart = `${link2masterField} = :${link2masterField}`;
+    const sql = `DELETE FROM ${detailRelation} WHERE ${wherePart}`;
+    const [masterID] = pkValues;
+    const params = {
+      [link2masterField]: masterID
+    };
+
+    return { sql, params };
+  });
+
+  const steps = [...cascadeSetSteps, ...cascadeDetailSteps, mainStep];
   console.log("Delete steps: ", steps);
   return steps;
 }

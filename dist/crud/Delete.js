@@ -2,8 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const gdmn_orm_1 = require("gdmn-orm");
 const Constants_1 = require("../ddl/Constants");
-// why delete in crosstable need make by hands?
-// why not cascade delete?
 function buildDeleteSteps(input) {
     const { pk, entity } = input;
     const pkNames = entity.pk.map(key => key.adapter.field);
@@ -30,7 +28,24 @@ function buildDeleteSteps(input) {
         };
         return { sql, params };
     });
-    const steps = [...cascadeSetSteps, mainStep];
+    const detailAttrs = attributes.filter(attr => gdmn_orm_1.DetailAttribute.isType(attr));
+    const cascadeDetailSteps = detailAttrs.map((currDetailAttr) => {
+        const [detailEntity] = currDetailAttr.entities;
+        const detailRelation = currDetailAttr.adapter ?
+            currDetailAttr.adapter.masterLinks[0].detailRelation :
+            detailEntity.name;
+        const link2masterField = currDetailAttr.adapter ?
+            currDetailAttr.adapter.masterLinks[0].link2masterField :
+            Constants_1.Constants.DEFAULT_MASTER_KEY_NAME;
+        const wherePart = `${link2masterField} = :${link2masterField}`;
+        const sql = `DELETE FROM ${detailRelation} WHERE ${wherePart}`;
+        const [masterID] = pkValues;
+        const params = {
+            [link2masterField]: masterID
+        };
+        return { sql, params };
+    });
+    const steps = [...cascadeSetSteps, ...cascadeDetailSteps, mainStep];
     console.log("Delete steps: ", steps);
     return steps;
 }

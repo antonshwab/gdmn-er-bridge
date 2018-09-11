@@ -64,17 +64,17 @@ function makeDetailsSteps(entity, details) {
         // use default values
         // 2 (simple). currDetail.attribute.adapter.masterLinks.length === 1
         // 3 (harder). currDetail.attribute.adapter.masterLinks.length > 1
-        const detailRelation = currDetail.attribute.adapter ?
-            currDetail.attribute.adapter.masterLinks[0].detailRelation :
-            currDetail.attribute.name;
-        const link2masterField = currDetail.attribute.adapter ?
-            currDetail.attribute.adapter.masterLinks[0].link2masterField :
+        const currDetailAttr = currDetail.attribute;
+        const [detailEntity] = currDetailAttr.entities;
+        const detailRelation = currDetailAttr.adapter ?
+            currDetailAttr.adapter.masterLinks[0].detailRelation :
+            detailEntity.attribute.name;
+        const link2masterField = currDetailAttr.adapter ?
+            currDetailAttr.adapter.masterLinks[0].link2masterField :
             Constants_1.Constants.DEFAULT_MASTER_KEY_NAME;
-        const [detailEntity] = currDetail.attribute.entities;
-        const pKeysAttributes = detailEntity.pk;
-        const pKeysNames = pKeysAttributes.map((k) => k.name);
         const pKeysValuesGroups = currDetail.value;
         const pKeysParts = pKeysValuesGroups.map((pkValues, groupIndex) => {
+            const pKeysNames = detailEntity.pk.map((k) => k.name);
             const sqlPart = pKeysNames
                 .map((name) => `${name} = :${name}${groupIndex}`)
                 .join(" AND ");

@@ -68,16 +68,17 @@ function makeSetsSteps(pk, sets) {
 }
 function makeDetailsSteps(pk, details) {
     const detailsSteps = details.map(currDetail => {
-        const detailRelation = currDetail.attribute.adapter ? currDetail.attribute.adapter.masterLinks[0].detailRelation :
-            currDetail.attribute.name;
-        const link2masterField = currDetail.attribute.adapter ?
-            currDetail.attribute.adapter.masterLinks[0].link2masterField :
+        const currDetailAttr = currDetail.attribute;
+        const [detailEntity] = currDetailAttr.entities;
+        const detailRelation = currDetailAttr.adapter ?
+            currDetailAttr.adapter.masterLinks[0].detailRelation :
+            detailEntity.attribute.name;
+        const link2masterField = currDetailAttr.adapter ?
+            currDetailAttr.adapter.masterLinks[0].link2masterField :
             Constants_1.Constants.DEFAULT_MASTER_KEY_NAME;
-        const [detailEntity] = currDetail.attribute.entities;
-        const pKeysAttributes = detailEntity.pk;
-        const pKeysNames = pKeysAttributes.map(key => key.name);
         const pKeysValuesGroups = currDetail.value;
         const parts = pKeysValuesGroups.map((pkValues, groupIndex) => {
+            const pKeysNames = detailEntity.pk.map(key => key.name);
             const sql = pKeysNames
                 .map(name => `${name} = :${name}${groupIndex}`)
                 .join(" AND ");
