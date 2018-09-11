@@ -1,5 +1,6 @@
 import { Entity, SetAttribute, DetailAttribute, Attribute, ScalarAttribute, EntityAttribute } from "gdmn-orm";
 import { AConnection } from "gdmn-db";
+import { setsThunk, detailsThunk } from "./Insert";
 export declare type Scalar = string | boolean | number | Date | null;
 export interface IValue<AttrType extends Attribute, valueType> {
     attribute: AttrType;
@@ -35,7 +36,8 @@ export declare type Step = {
 };
 export declare abstract class Crud {
     private static run;
-    static executeInsert(connection: AConnection, input: IInsert): Promise<void>;
+    static returningRun(connection: AConnection, steps: Array<Step | setsThunk | detailsThunk>): Promise<number>;
+    static executeInsert(connection: AConnection, input: IInsert): Promise<number>;
     static executeUpdateOrInsert(connection: AConnection, input: IUpdateOrInsert): Promise<void>;
     static executeUpdate(connection: AConnection, input: IUpdate): Promise<void>;
     static executeDelete(connection: AConnection, input: IDelete): Promise<void>;

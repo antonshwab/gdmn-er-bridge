@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const gdmn_orm_1 = require("gdmn-orm");
-function groupAttrsByType(values) {
+function groupAttrsValuesByType(values) {
     const attrsByTypeAcc = {
         scalars: [],
         entities: [],
@@ -40,6 +40,6 @@ function groupAttrsByType(values) {
         throw new Error("Unknow attribute type");
     }, attrsByTypeAcc);
 }
-exports.groupAttrsByType = groupAttrsByType;
+exports.groupAttrsValuesByType = groupAttrsValuesByType;
 ;
 //# sourceMappingURL=common.js.map

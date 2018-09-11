@@ -2,7 +2,7 @@ import { Entity, SetAttribute, DetailAttribute, Attribute, ScalarAttribute, Enti
 import { AConnection } from "gdmn-db";
 import { buildUpdateOrInsertSteps } from "./UpdateOrInsert";
 import { buildUpdateSteps } from "./Update";
-import { buildInsertSteps } from "./Insert";
+import { buildInsertSteps, setsThunk, detailsThunk } from "./Insert";
 import { buildDeleteSteps } from "./Delete";
 
 export type Scalar = string | boolean | number | Date | null;
@@ -48,7 +48,6 @@ export interface IAttributesByType {
 
 export type Step = { sql: string, params: {} };
 
-
 export abstract class Crud {
 
   private static async run(connection: AConnection, steps: Step[]): Promise<void> {
@@ -66,13 +65,51 @@ export abstract class Crud {
     });
   }
 
+  public static async returningRun(connection: AConnection, steps: Array<Step | setsThunk | detailsThunk>): Promise<number> {
+
+    const [returningStep, ...thunks] = steps;
+
+    const result = await AConnection.executeTransaction({
+      connection,
+      callback: async (transaction) => {
+        const { sql, params } = returningStep as Step;
+        const result = await connection.executeReturning(transaction, sql, params);
+        console.log("RETURNING id");
+        return result;
+      }
+    });
+
+    const id = result.getNumber("ID");
+
+    const normalized = (thunks as Array<setsThunk | detailsThunk>)
+      .reduce((acc: Step[], thunk) => {
+        return [...acc, ...thunk(id)]
+      }, []);
+
+    await AConnection.executeTransaction({
+      connection,
+      callback: async (transaction) => {
+        for (const { sql, params } of normalized) {
+          await connection.execute(transaction, sql, params);
+        }
+      }
+    });
+
+    return id;
+  }
+
   public static async executeInsert(
     connection: AConnection,
     input: IInsert
-  ): Promise<void> {
+  ): Promise<number> {
 
     const steps = buildInsertSteps(input);
-    await this.run(connection, steps);
+    return await this.returningRun(connection, steps);
+
+    // const [returningStep, ...restSteps] = buildInsertSteps(input);
+    // const id = await this.runReturning(connection, returningStep);
+    // await this.run(connection, id, restSteps);
+    // return id;
   }
 
   public static async executeUpdateOrInsert(

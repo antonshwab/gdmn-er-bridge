@@ -68,7 +68,7 @@ function buildUpdateOrInsertSteps(input) {
     if (pk === undefined) {
         throw new Error("For undefined pk not implemented");
     }
-    const { scalars, entities, sets, details } = common_1.groupAttrsByType(values);
+    const { scalars, entities, sets, details } = common_1.groupAttrsValuesByType(values);
     const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars, entities);
     const detailsSteps = Update_1.makeDetailsSteps(pk, details);
     const setsSteps = makeSetsSteps(pk, sets);

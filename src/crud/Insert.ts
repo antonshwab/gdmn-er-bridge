@@ -1,94 +1,53 @@
-import { Entity, DetailAttribute } from "gdmn-orm";
+import { Entity, DetailAttribute, ScalarAttribute, EntityAttribute } from "gdmn-orm";
 import { Constants } from "../ddl/Constants";
-import { groupAttrsByType } from "./common";
+import { groupAttrsValuesByType } from "./common";
 import { IInsert, Step, ISetValue, Scalar, IValue } from "./Crud";
 
+export type setsThunk = (crossPKOwnValue: number) => Step[];
+export type detailsThunk = (masterKeyValue: number) => Step[];
 
-export function buildInsertSteps(input: IInsert): Step[] {
+export function buildInsertSteps(input: IInsert): Array<Step | setsThunk | detailsThunk> {
   const { entity, values } = input;
 
-  const { scalars, entities, sets, details } = groupAttrsByType(values);
+  const { scalars, entities, sets, details } = groupAttrsValuesByType(values);
 
-  const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, scalars, entities)
-  const setsSteps = makeSetsSteps(entity, sets);
-  const detailsSteps = makeDetailsSteps(entity, details);
+  const returningStep = makeScalarsEntitiesStep(entity, scalars, entities);
 
-  const steps = [...scalarsEntitiesSteps, ...setsSteps, ...detailsSteps];
-  console.log("Insert steps: ", steps);
-  return steps;
-}
+  const setsThunk = (crossPKOwnValue: number) => {
+    return makeSetsSteps(crossPKOwnValue, sets);
+  };
 
-function makeSQLInsert(tableName: string,
-  valuesNames: any[], valuesPlaceholders: any[]): string {
+  const detailsThunk = (masterKeyValue: number) => {
+    return makeDetailsSteps(masterKeyValue, details);
+  };
 
-  const valuesString = valuesNames.join(", ");
-  const placeholdersString = valuesPlaceholders.join(", ");
-  return `INSERT INTO ${tableName} (${valuesString}) VALUES (${placeholdersString})`;
-}
-
-function makeSetsSteps(entity: Entity, sets: ISetValue[]): Step[] {
-
-  const steps = sets.map((currSet) => {
-
-    const { attribute, setValues } = currSet;
-    const restCrossTableAttrsParams = setValues.reduce((acc, currValue) => {
-      return { ...acc, [currValue.attribute.name]: currValue.value };
-    }, {});
-    const crossPKOwnPlaceholder = `(SELECT FIRST 1 ID FROM ${entity.name} ORDER BY ID DESC)`;
-    const [crossPKRefValue] = currSet.value;
-    const params = {
-      [Constants.DEFAULT_CROSS_PK_REF_NAME]: crossPKRefValue,
-      ...restCrossTableAttrsParams
-    };
-
-    const crossTableAttrsNames = [Constants.DEFAULT_CROSS_PK_OWN_NAME, ...Object.keys(params)];
-    const crossTableAttrsPlaceholders = [crossPKOwnPlaceholder, ...Object.keys(params).map((name) => `:${name}`)];
-    const crossTableName = attribute.adapter ? attribute.adapter!.crossRelation : attribute.name;
-    const sql = makeSQLInsert(crossTableName, crossTableAttrsNames, crossTableAttrsPlaceholders);
-    const step: Step = { sql, params };
-    return step;
-  });
-
-  return steps;
-}
-
-function makeScalarsEntitiesSteps(entity: Entity, scalars: any[],
-  entities: any[]): Step[] {
-
-  const scalarsEntities = [...scalars, ...entities];
-
-  if (scalarsEntities.length === 0) {
-    return [];
+  if (returningStep === undefined) {
+    return [setsThunk, detailsThunk];
   }
 
-  const scalarsEntitiesParams = scalarsEntities.reduce((acc, currValue) => {
-    if (Array.isArray(currValue.value)) { // for Entity Attribute
-      const [value] = currValue.value;
-      return { ...acc, [currValue.attribute.name]: value };
-    }
-    return { ...acc, [currValue.attribute.name]: currValue.value };
-  }, {});
-  const scalarsAndEntitiesNames = Object.keys(scalarsEntitiesParams);
-  const scalarAndEntityPlaceholders = scalarsAndEntitiesNames.map((name) => `:${name}`);
-  const scalarAndEntitySql = makeSQLInsert(
-    entity.name,
-    scalarsAndEntitiesNames,
-    scalarAndEntityPlaceholders
-  );
-  const scalarsAndEntitiesStep = { sql: scalarAndEntitySql, params: scalarsEntitiesParams };
-  return [scalarsAndEntitiesStep];
+  return [returningStep, setsThunk, detailsThunk];
 }
 
-function makeDetailsSteps(entity: Entity,
+function makeSQLInsert(table: string,
+  attrsNames: string[], placeholders: string[]): string {
+
+  const attrsNamesString = attrsNames.join(", ");
+  const placeholdersString = placeholders.join(", ");
+  return `INSERT INTO ${table} (${attrsNamesString}) VALUES (${placeholdersString})`;
+}
+
+function makeSQLInsertReturningID(table: string,
+  attrsNames: string[], placeholders: string[]): string {
+
+  const attrsNamesString = attrsNames.join(", ");
+  const placeholdersString = placeholders.join(", ");
+  return `INSERT INTO ${table} (${attrsNamesString}) VALUES (${placeholdersString}) RETURNING ID`;
+}
+
+function makeDetailsSteps(masterKeyValue: number,
   details: IValue<DetailAttribute, Scalar[][]>[]): Step[] {
 
   const detailsSteps = details.map((currDetail) => {
-    // 3 cases:
-    // 1 (simple). currDetail.attribute.adapter == undefined
-    // use default values
-    // 2 (simple). currDetail.attribute.adapter.masterLinks.length === 1
-    // 3 (harder). currDetail.attribute.adapter.masterLinks.length > 1
-
     const currDetailAttr = currDetail.attribute;
     const [detailEntity] = currDetailAttr.entities;
 
@@ -120,13 +79,63 @@ function makeDetailsSteps(entity: Entity,
       return { ...acc, ...currPart.params };
     }, {});
     const whereSql = pKeysParts.map((part) => part.sqlPart).join(" OR ");
-
-    const masterIdSQL = `(SELECT FIRST 1 ID FROM ${entity.name} ORDER BY ID DESC)`;
-    const sql = `UPDATE ${detailRelation} SET ${link2masterField} = (${masterIdSQL}) WHERE ${whereSql}`;
+    const sql = `UPDATE ${detailRelation} SET ${link2masterField} = (${masterKeyValue}) WHERE ${whereSql}`;
     const step = { sql, params: whereParams };
     return step;
   });
 
-  console.log(detailsSteps);
   return detailsSteps;
+}
+
+function makeSetsSteps(crossPKOwnValue: number, sets: ISetValue[]): Step[] {
+
+  const steps = sets.map((currSet) => {
+
+    const { attribute, setValues } = currSet;
+    const restCrossTableAttrsParams = setValues.reduce((acc, currValue) => {
+      return { ...acc, [currValue.attribute.name]: currValue.value };
+    }, {});
+
+    const [crossPKRefValue] = currSet.value;
+    const params = {
+      [Constants.DEFAULT_CROSS_PK_OWN_NAME]: crossPKOwnValue,
+      [Constants.DEFAULT_CROSS_PK_REF_NAME]: crossPKRefValue,
+      ...restCrossTableAttrsParams
+    };
+
+    const attrsNames = Object.keys(params);
+    const placeholders = attrsNames.map((name) => `:${name}`);
+
+    const crossTableName = attribute.adapter ? attribute.adapter!.crossRelation : attribute.name;
+    const sql = makeSQLInsert(crossTableName, attrsNames, placeholders);
+    const step: Step = { sql, params };
+    return step;
+  });
+
+  return steps;
+}
+
+function makeScalarsEntitiesStep(entity: Entity,
+  scalars: Array<IValue<ScalarAttribute, Scalar>>,
+  entities: Array<IValue<EntityAttribute, Scalar[]>>): Step | undefined {
+
+  const scalarsEntities = [...scalars, ...entities];
+
+  if (scalarsEntities.length === 0) {
+    undefined;
+  }
+
+  const params = scalarsEntities.reduce((acc, currAttrValue) => {
+    if (Array.isArray(currAttrValue.value)) { // for Entity attribute
+      return { ...acc, [currAttrValue.attribute.name]: currAttrValue.value };
+    }
+    return { ...acc, [currAttrValue.attribute.name]: currAttrValue.value };
+  }, {});
+
+  const attrsNames = Object.keys(params);
+  const placeholders = attrsNames.map(name => `:${name}`);
+  const sql = makeSQLInsertReturningID(entity.name, attrsNames, placeholders);
+
+  const step = { sql, params };
+  return step;
 }

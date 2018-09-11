@@ -1,7 +1,7 @@
 import { Constants } from "../ddl/Constants";
 import { ISetValue, Step, IUpdateOrInsert } from "./Crud";
 import { Entity } from "gdmn-orm";
-import { groupAttrsByType } from "./common";
+import { groupAttrsValuesByType } from "./common";
 import { makeDetailsSteps } from "./Update";
 
 function makeUpdateOrInsertSQL(
@@ -95,7 +95,7 @@ export function buildUpdateOrInsertSteps(input: IUpdateOrInsert) {
     throw new Error("For undefined pk not implemented");
   }
 
-  const { scalars, entities, sets, details } = groupAttrsByType(values);
+  const { scalars, entities, sets, details } = groupAttrsValuesByType(values);
   const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars,
     entities);
   const detailsSteps = makeDetailsSteps(pk, details);

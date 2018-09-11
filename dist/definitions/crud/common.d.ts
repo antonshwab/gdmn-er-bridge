@@ -1,2 +1,2 @@
 import { Values, IAttributesByType } from "./Crud";
-export declare function groupAttrsByType(values: Values): IAttributesByType;
+export declare function groupAttrsValuesByType(values: Values): IAttributesByType;

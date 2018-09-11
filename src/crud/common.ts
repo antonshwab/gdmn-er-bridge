@@ -1,7 +1,7 @@
 import { ScalarAttribute, SetAttribute, DetailAttribute, EntityAttribute } from "gdmn-orm";
 import { Values, IAttributesByType, Scalar, IValue, ISetValue } from "./Crud";
 
-export function groupAttrsByType(values: Values) {
+export function groupAttrsValuesByType(values: Values) {
   const attrsByTypeAcc: IAttributesByType = {
     scalars: [],
     entities: [],

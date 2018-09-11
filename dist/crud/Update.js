@@ -1,10 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const Common_1 = require("./Common");
 const Constants_1 = require("../ddl/Constants");
+const common_1 = require("./common");
 function buildUpdateSteps(input) {
     const { pk, entity, values } = input;
-    const { scalars, entities, sets, details } = Common_1.groupAttrsByType(values);
+    const { scalars, entities, sets, details } = common_1.groupAttrsValuesByType(values);
     const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars, entities);
     const setsSteps = makeSetsSteps(pk, sets);
     const detailsSteps = makeDetailsSteps(pk, details);

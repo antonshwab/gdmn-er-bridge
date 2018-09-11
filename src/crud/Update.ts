@@ -1,13 +1,13 @@
 import { Step, IUpdate, ISetValue, IValue, Scalar } from "./Crud";
 import { Entity, DetailAttribute } from "gdmn-orm";
-import { groupAttrsByType } from "./Common";
 import { Constants } from "../ddl/Constants";
+import { groupAttrsValuesByType } from "./common";
 
 
 export function buildUpdateSteps(input: IUpdate): Step[] {
   const { pk, entity, values } = input;
 
-  const { scalars, entities, sets, details } = groupAttrsByType(values);
+  const { scalars, entities, sets, details } = groupAttrsValuesByType(values);
   const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars,
     entities);
   const setsSteps = makeSetsSteps(pk, sets);
