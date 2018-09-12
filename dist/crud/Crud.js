@@ -52,8 +52,14 @@ class Crud {
         // return id;
     }
     static async executeUpdateOrInsert(connection, input) {
+        if (input.pk === undefined) {
+            const steps = Insert_1.buildInsertSteps(input);
+            return await this.returningRun(connection, steps);
+        }
         const steps = UpdateOrInsert_1.buildUpdateOrInsertSteps(input);
         await this.run(connection, steps);
+        const [id] = input.pk;
+        return id;
     }
     static async executeUpdate(connection, input) {
         const steps = Update_1.buildUpdateSteps(input);

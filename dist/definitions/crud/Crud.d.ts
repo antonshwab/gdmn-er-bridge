@@ -38,7 +38,7 @@ export declare abstract class Crud {
     private static run;
     static returningRun(connection: AConnection, steps: Array<Step | setsThunk | detailsThunk>): Promise<number>;
     static executeInsert(connection: AConnection, input: IInsert): Promise<number>;
-    static executeUpdateOrInsert(connection: AConnection, input: IUpdateOrInsert): Promise<void>;
+    static executeUpdateOrInsert(connection: AConnection, input: IUpdateOrInsert): Promise<number>;
     static executeUpdate(connection: AConnection, input: IUpdate): Promise<void>;
     static executeDelete(connection: AConnection, input: IDelete): Promise<void>;
 }

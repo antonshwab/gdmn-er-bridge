@@ -22,7 +22,7 @@ function makeSetsSteps(pk, sets) {
             ...restCrossTableAttrsParams
         };
         const attrsNames = Object.keys(params);
-        const placeholders = [attrsNames.map(name => `:${name}`)];
+        const placeholders = attrsNames.map(name => `:${name}`);
         const crossTableName = attribute.adapter ? attribute.adapter.crossRelation : attribute.name;
         const sql = makeUpdateOrInsertSQL(crossTableName, attrsNames, placeholders);
         const step = { sql, params };
@@ -64,10 +64,8 @@ function makeScalarsEntitiesSteps(entity, pk, scalars, entities) {
     return steps;
 }
 function buildUpdateOrInsertSteps(input) {
-    const { pk, entity, values } = input;
-    if (pk === undefined) {
-        throw new Error("For undefined pk not implemented");
-    }
+    const { entity, values } = input;
+    const pk = input.pk;
     const { scalars, entities, sets, details } = common_1.groupAttrsValuesByType(values);
     const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars, entities);
     const detailsSteps = Update_1.makeDetailsSteps(pk, details);

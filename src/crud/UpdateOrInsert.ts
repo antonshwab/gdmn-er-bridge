@@ -6,8 +6,8 @@ import { makeDetailsSteps } from "./Update";
 
 function makeUpdateOrInsertSQL(
   tableName: string,
-  attrsNames: any[],
-  placeholders: any[]) {
+  attrsNames: string[],
+  placeholders: string[]) {
 
   const attrsNamesString = attrsNames.join(", ");
   const placeholdersString = placeholders.join(", ");
@@ -33,7 +33,7 @@ function makeSetsSteps(pk: any[], sets: ISetValue[]): Step[] {
     };
 
     const attrsNames = Object.keys(params);
-    const placeholders = [attrsNames.map(name => `:${name}`)];
+    const placeholders = attrsNames.map(name => `:${name}`);
     const crossTableName = attribute.adapter ? attribute.adapter!.crossRelation : attribute.name;
     const sql = makeUpdateOrInsertSQL(crossTableName, attrsNames, placeholders);
     const step: Step = { sql, params };
@@ -88,14 +88,12 @@ function makeScalarsEntitiesSteps(
 }
 
 
-export function buildUpdateOrInsertSteps(input: IUpdateOrInsert) {
-  const { pk, entity, values } = input;
-
-  if (pk === undefined) {
-    throw new Error("For undefined pk not implemented");
-  }
+export function buildUpdateOrInsertSteps(input: IUpdateOrInsert): Step[] {
+  const { entity, values } = input;
+  const pk = input.pk!;
 
   const { scalars, entities, sets, details } = groupAttrsValuesByType(values);
+
   const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars,
     entities);
   const detailsSteps = makeDetailsSteps(pk, details);
@@ -104,6 +102,5 @@ export function buildUpdateOrInsertSteps(input: IUpdateOrInsert) {
   const steps = [...scalarsEntitiesSteps, ...setsSteps, ...detailsSteps];
 
   console.log("steps for updateOrInsert: ", steps);
-
   return steps;
 }

@@ -75,86 +75,86 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
         entity: appEntity,
         values: [appUidValue]
       };
-      await Crud.executeInsert(connection, insertApp);
 
-      const appId = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const result = await connection.executeReturning(transaction, `
-                SELECT FIRST 1
-                  app.ID
-                FROM APPLICATION app
-                WHERE app.UID = :appUid`,
-            { appUid: appUidValue.value });
+      const appID = await Crud.executeInsert(connection, insertApp);
 
-          return result.getNumber("ID");
-        },
-      });
-
-      const appIdValue: IValue<EntityAttribute, Scalar[]> = {
+      const appIDValue: IValue<EntityAttribute, Scalar[]> = {
         attribute: backupEntityAttribute,
-        value: [appId]
+        value: [appID]
       };
 
       const backupUidValue: IValue<ScalarAttribute, Scalar> = {
         attribute: backupUidAttribute,
         value: "uniqueuid"
       };
-
       const backupAliasValue: IValue<ScalarAttribute, Scalar> = {
         attribute: backupAliasAttribute,
         value: "alias"
       };
-
       const insertBackup: IInsert = {
         entity: appBackupEntity,
-        values: [appIdValue, backupUidValue, backupAliasValue]
+        values: [appIDValue, backupUidValue, backupAliasValue]
       };
 
-      await Crud.executeInsert(connection, insertBackup);
-
-      const insertedPK = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const result = await connection.executeReturning(transaction, `
-                SELECT FIRST 1
-                  bkp.ID
-                FROM APPLICATION_BACKUPS bkp
-                WHERE bkp.UID = :bkpUid`,
-            { bkpUid: backupUidValue.value });
-
-          return result.getNumber("ID");
-        },
-      });
+      const bkpID = await Crud.executeInsert(connection, insertBackup);
 
       const newBackupAliasValue: IValue<ScalarAttribute, Scalar> = {
         attribute: backupAliasAttribute,
         value: "newAlias"
       };
 
-      const updateOrInsertBackup: IUpdateOrInsert = {
-        pk: [insertedPK],
+      const updateOrInsertBackup1: IUpdateOrInsert = {
+        pk: [bkpID],
         entity: appBackupEntity,
-        values: [appIdValue, backupUidValue, newBackupAliasValue]
+        values: [appIDValue, newBackupAliasValue]
       };
 
-      await Crud.executeUpdateOrInsert(connection, updateOrInsertBackup);
+      await Crud.executeUpdateOrInsert(connection, updateOrInsertBackup1);
+
+      const backupUidValue2: IValue<ScalarAttribute, Scalar> = {
+        attribute: backupUidAttribute,
+        value: "uniqueuid2"
+      };
+
+      const backupAliasValue2: IValue<ScalarAttribute, Scalar> = {
+        attribute: backupAliasAttribute,
+        value: "alias2"
+      };
+
+      const udpateOrInsertBackup2: IUpdateOrInsert = {
+        entity: appBackupEntity,
+        values: [appIDValue, backupUidValue2, backupAliasValue2]
+      };
+
+      const bkp2ID = await Crud.executeUpdateOrInsert(connection, udpateOrInsertBackup2);
 
       await AConnection.executeTransaction({
         connection,
         callback: async (transaction) => {
-          const selectSql = `SELECT FIRST 1 bkp.UID, bkp.ALIAS, bkp.APP FROM APPLICATION_BACKUPS bkp`;
 
-          const result = await connection.executeReturning(transaction, selectSql);
+          const sql1 = `SELECT * FROM APPLICATION_BACKUPS WHERE ID = ${bkpID}`;
+          const result1 = await connection.executeReturning(transaction, sql1);
 
-          const uid = result.getString(backupUidAttribute.name);
-          expect(uid).toEqual(backupUidValue.value);
+          const uid1 = result1.getString(backupUidAttribute.name);
+          expect(uid1).toEqual(backupUidValue.value);
 
-          const alias = result.getString(backupAliasAttribute.name);
-          expect(alias).toEqual(newBackupAliasValue.value);
+          const alias1 = result1.getString(backupAliasAttribute.name);
+          expect(alias1).toEqual(newBackupAliasValue.value);
 
-          const app = result.getNumber(backupEntityAttribute.name);
-          expect(app).toEqual(appIdValue.value[0]);
+          const expectedAppID = result1.getNumber(backupEntityAttribute.name);
+          expect(expectedAppID).toEqual(appID);
+
+          const sql2 = `SELECT * FROM APPLICATION_BACKUPS WHERE ID = ${bkp2ID}`;
+          const result2 = await connection.executeReturning(transaction, sql2);
+
+          const uid2 = result2.getString(backupUidAttribute.name);
+          expect(uid2).toEqual(backupUidValue2.value);
+
+          const alias2 = result2.getString(backupAliasAttribute.name);
+          expect(alias2).toEqual(backupAliasValue2.value);
+
+          const expectedAppID2 = result2.getNumber(backupEntityAttribute.name);
+          expect(expectedAppID2).toEqual(appID);
         }
       });
     });
@@ -163,7 +163,6 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
       const erModel: ERModel = await initERModelBuilder(async (builder) => {
         const erModel = await builder.initERModel();
 
-        // APPLICATION
         const appEntity = await builder.addEntity(erModel, new Entity({
           name: "APPLICATION", lName: { ru: { name: "Приложение" } }
         }));
@@ -212,17 +211,7 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
         entity: appEntity,
         values: [appUIDValue]
       };
-      await Crud.executeInsert(connection, appInsert);
-
-      const appId = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM APPLICATION WHERE UID = :appUID`;
-          const params = { appUID: appUIDValue.value };
-          const result = await connection.executeReturning(transaction, sql, params);
-          return result.getNumber("ID");
-        }
-      });
+      const appID = await Crud.executeInsert(connection, appInsert);
 
       const appSetAttribute: SetAttribute = userEntity.attribute("APPLICATIONS") as SetAttribute;
       const appAliasAttribute: ScalarAttribute = appSetAttribute.attribute("ALIAS");
@@ -237,27 +226,14 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
       const appSetValue: ISetValue = {
         attribute: appSetAttribute,
         setValues: [appAliasValue],
-        value: [appId]
+        value: [appID]
       };
       const userInsert: IInsert = {
         entity: userEntity,
         values: [loginAttributeValue, appSetValue]
       };
-      await Crud.executeInsert(connection, userInsert);
+      const userID = await Crud.executeInsert(connection, userInsert);
 
-      const userID = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM APP_USER WHERE LOGIN = :login`;
-          const params = { login: loginAttributeValue.value };
-          const result = await connection.executeReturning(transaction, sql, params);
-          return result.getNumber("ID");
-        }
-      });
-
-      // TODO:
-      // when pk more than just id ???
-      // for example: primary keys for user must be [id, login]
       const newAppAliasValue: IValue<ScalarAttribute, Scalar> = {
         attribute: appAliasAttribute,
         value: "newAppAlias"
@@ -265,8 +241,11 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
       const newAppSetValue: ISetValue = {
         attribute: appSetAttribute,
         setValues: [newAppAliasValue],
-        value: [appId]
+        value: [appID]
       };
+      // TODO:
+      // when pk more than just id ???
+      // for example: primary keys for user must be [id, login]
       const userUpdateOrInsert: IUpdateOrInsert = {
         pk: [userID],
         entity: userEntity,
@@ -277,11 +256,10 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
       await AConnection.executeTransaction({
         connection,
         callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 * FROM ${userEntity.name} ORDER BY ID DESC`;
+          const sql = `SELECT * FROM ${userEntity.name} WHERE ID = ${userID}`;
           const params = { login: loginAttributeValue.value };
           const userResult = await connection.executeReturning(
             transaction, sql, params);
-          const userID = userResult.getNumber("ID");
           const userLogin = userResult.getString("LOGIN");
           expect(userLogin).toEqual(loginAttributeValue.value);
 
@@ -292,7 +270,7 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
           const crossOwnKeyValue = crossResult.getNumber(Constants.DEFAULT_CROSS_PK_OWN_NAME);
           expect(crossOwnKeyValue).toEqual(userID);
           const crossRefKeyValue = crossResult.getNumber(Constants.DEFAULT_CROSS_PK_REF_NAME);
-          expect(crossRefKeyValue).toEqual(appId);
+          expect(crossRefKeyValue).toEqual(appID);
           const crossAliasValue = crossResult.getString(appAliasValue.attribute.name);
           expect(crossAliasValue).toEqual(newAppAliasValue.value);
         }
@@ -343,17 +321,7 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
         entity: placeEntity,
         values: [placeAddressValue1]
       };
-      // TODO: executeInsert returning insertedID
-      await Crud.executeInsert(connection, placeInsert1);
-      const place1ID = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM PLACE WHERE ADDRESS = :address`;
-          const params = { address: placeAddressValue1.value };
-          const result = await connection.executeReturning(transaction, sql, params);
-          return result.getNumber("ID");
-        }
-      });
+      const place1ID = await Crud.executeInsert(connection, placeInsert1);
 
       const placeAddressValue2: IValue<ScalarAttribute, Scalar> = {
         attribute: placeAddressAttribute,
@@ -363,16 +331,7 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
         entity: placeEntity,
         values: [placeAddressValue2]
       };
-      await Crud.executeInsert(connection, placeInsert2);
-      const place2ID = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM PLACE WHERE ADDRESS = :address`;
-          const params = { address: placeAddressValue2.value };
-          const result = await connection.executeReturning(transaction, sql, params);
-          return result.getNumber("ID");
-        }
-      });
+      const place2ID = await Crud.executeInsert(connection, placeInsert2);
 
       const userEntity = erModel.entity("USER_ENTITY");
       const userNameAttr = userEntity.attribute("NAME");
@@ -392,17 +351,7 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
         values: [userNameValue, placeValue]
       };
 
-      await Crud.executeInsert(connection, userInsert);
-
-      const userID = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM ${userEntity.name} ORDER BY ID DESC`;
-          const result = await connection.executeReturning(transaction, sql);
-          return result.getNumber("ID");
-        }
-      });
-
+      const userID = await Crud.executeInsert(connection, userInsert);
 
       const placeAddressValue3: IValue<ScalarAttribute, Scalar> = {
         attribute: placeAddressAttribute,
@@ -412,16 +361,7 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
         entity: placeEntity,
         values: [placeAddressValue3]
       };
-      await Crud.executeInsert(connection, placeInsert3);
-      const place3ID = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM PLACE WHERE ADDRESS = :address`;
-          const params = { address: placeAddressValue2.value };
-          const result = await connection.executeReturning(transaction, sql, params);
-          return result.getNumber("ID");
-        }
-      });
+      const place3ID = await Crud.executeInsert(connection, placeInsert3);
 
       const newUserNameAttributeValue: IValue<ScalarAttribute, Scalar> = {
         attribute: userNameAttr,
@@ -442,9 +382,9 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
       await AConnection.executeTransaction({
         connection,
         callback: async (transaction) => {
-          const insertedUserSQL = `SELECT FIRST 1 * FROM ${userEntity.name} ORDER BY ID DESC`;
+          const sql = `SELECT * FROM ${userEntity.name} WHERE ID = ${userID}`;
 
-          const userResult = await connection.executeReturning(transaction, insertedUserSQL);
+          const userResult = await connection.executeReturning(transaction, sql);
           const insertedUsername = userResult.getString("NAME");
           expect(insertedUsername).toEqual(newUserNameAttributeValue.value);
         }
@@ -466,8 +406,9 @@ export function testUpdateOrInsert(connection: AConnection, initERModelBuilder):
             expect(address).toEqual(expectedAddresses[i]);
             i++;
           }
-          expect(i).toEqual(2);
           await placeResult.close();
+          expect(i).toEqual(3);
+
         }
       });
 

@@ -105,19 +105,21 @@ export abstract class Crud {
 
     const steps = buildInsertSteps(input);
     return await this.returningRun(connection, steps);
-
-    // const [returningStep, ...restSteps] = buildInsertSteps(input);
-    // const id = await this.runReturning(connection, returningStep);
-    // await this.run(connection, id, restSteps);
-    // return id;
   }
 
   public static async executeUpdateOrInsert(
     connection: AConnection,
-    input: IUpdateOrInsert): Promise<void> {
+    input: IUpdateOrInsert): Promise<number> {
+
+    if (input.pk === undefined) {
+      const steps = buildInsertSteps(input);
+      return await this.returningRun(connection, steps);
+    }
 
     const steps = buildUpdateOrInsertSteps(input);
     await this.run(connection, steps);
+    const [id] = input.pk;
+    return id;
   }
 
   public static async executeUpdate(
