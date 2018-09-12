@@ -67,8 +67,8 @@ describe("ERBridge", () => {
 
   // testInsert(connection, initERModelBuilder);
   // testUpdateOrInsert(connection, initERModelBuilder);
-  testUpdate(connection, initERModelBuilder);
-  // testDelete(connection, initERModelBuilder);
+  // testUpdate(connection, initERModelBuilder);
+  testDelete(connection, initERModelBuilder);
 
   // it("empty entity", async () => {
   //   const erModel = await initERModelBuilder(async (builder) => {

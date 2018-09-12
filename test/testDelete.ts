@@ -23,7 +23,6 @@ export function testDelete(
       const erModel: ERModel = await initERModelBuilder(async (builder) => {
         const erModel = await builder.initERModel();
 
-        // APPLICATION
         const appEntity = await builder.addEntity(erModel, new Entity({
           name: "APPLICATION", lName: { ru: { name: "Приложение" } }
         }));
@@ -72,17 +71,8 @@ export function testDelete(
         entity: appEntity,
         values: [appUIDValue]
       };
-      await Crud.executeInsert(connection, appInsert);
 
-      const appId = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM APPLICATION WHERE UID = :appUID`;
-          const params = { appUID: appUIDValue.value };
-          const result = await connection.executeReturning(transaction, sql, params);
-          return result.getNumber("ID");
-        }
-      });
+      const appID = await Crud.executeInsert(connection, appInsert);
 
       const appSetAttribute: SetAttribute = userEntity.attribute("APPLICATIONS") as SetAttribute;
       const appAliasAttribute: ScalarAttribute = appSetAttribute.attribute("ALIAS");
@@ -97,23 +87,13 @@ export function testDelete(
       const appSetValue: ISetValue = {
         attribute: appSetAttribute,
         setValues: [appAliasValue],
-        value: [appId]
+        value: [appID]
       };
       const userInsert: IInsert = {
         entity: userEntity,
         values: [loginAttributeValue, appSetValue]
       };
-      await Crud.executeInsert(connection, userInsert);
-
-      const userID = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM APP_USER WHERE LOGIN = :login`;
-          const params = { login: loginAttributeValue.value };
-          const result = await connection.executeReturning(transaction, sql, params);
-          return result.getNumber("ID");
-        }
-      });
+      const userID = await Crud.executeInsert(connection, userInsert);
 
       // TODO:
       // when pk more than just id ???
@@ -125,7 +105,7 @@ export function testDelete(
       const newAppSetValue: ISetValue = {
         attribute: appSetAttribute,
         setValues: [newAppAliasValue],
-        value: [appId]
+        value: [appID]
       };
       const userUpdateOrInsert: IUpdateOrInsert = {
         pk: [userID],
@@ -197,17 +177,8 @@ export function testDelete(
         entity: placeEntity,
         values: [placeAddressValue1]
       };
-      // TODO: executeInsert returning insertedID
-      await Crud.executeInsert(connection, placeInsert1);
-      const place1ID = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM PLACE WHERE ADDRESS = :address`;
-          const params = { address: placeAddressValue1.value };
-          const result = await connection.executeReturning(transaction, sql, params);
-          return result.getNumber("ID");
-        }
-      });
+
+      const place1ID = await Crud.executeInsert(connection, placeInsert1);
 
       const placeAddressValue2: IValue<ScalarAttribute, Scalar> = {
         attribute: placeAddressAttribute,
@@ -217,16 +188,7 @@ export function testDelete(
         entity: placeEntity,
         values: [placeAddressValue2]
       };
-      await Crud.executeInsert(connection, placeInsert2);
-      const place2ID = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM PLACE WHERE ADDRESS = :address`;
-          const params = { address: placeAddressValue2.value };
-          const result = await connection.executeReturning(transaction, sql, params);
-          return result.getNumber("ID");
-        }
-      });
+      const place2ID = await Crud.executeInsert(connection, placeInsert2);
 
       const userEntity = erModel.entity("USER_ENTITY");
       const userNameAttr = userEntity.attribute("NAME");
@@ -246,16 +208,7 @@ export function testDelete(
         values: [userNameValue, placeValue]
       };
 
-      await Crud.executeInsert(connection, userInsert);
-
-      const userID = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM ${userEntity.name} ORDER BY ID DESC`;
-          const result = await connection.executeReturning(transaction, sql);
-          return result.getNumber("ID");
-        }
-      });
+      const userID = await Crud.executeInsert(connection, userInsert);
 
       const placeAddressValue3: IValue<ScalarAttribute, Scalar> = {
         attribute: placeAddressAttribute,
@@ -265,16 +218,7 @@ export function testDelete(
         entity: placeEntity,
         values: [placeAddressValue3]
       };
-      await Crud.executeInsert(connection, placeInsert3);
-      const place3ID = await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT FIRST 1 ID FROM PLACE WHERE ADDRESS = :address`;
-          const params = { address: placeAddressValue2.value };
-          const result = await connection.executeReturning(transaction, sql, params);
-          return result.getNumber("ID");
-        }
-      });
+      const place3ID = await Crud.executeInsert(connection, placeInsert3);
 
       const userDelete: IDelete = {
         pk: [userID],
@@ -289,8 +233,8 @@ export function testDelete(
           const sql = `SELECT * FROM ${userEntity.name} WHERE ID = ${userID}`;
           const userResult = await connection.executeQuery(transaction, sql);
           const next = await userResult.next();
-          expect(next).toBeFalsy();
           await userResult.close();
+          expect(next).toBeFalsy();
         }
       });
 
@@ -300,8 +244,8 @@ export function testDelete(
           const sql = `SELECT * FROM ${placeEntity.name} WHERE MASTER_KEY = ${userID}`;
           const userResult = await connection.executeQuery(transaction, sql);
           const next = await userResult.next();
-          expect(next).toBeFalsy();
           await userResult.close();
+          expect(next).toBeFalsy();
         }
       });
 

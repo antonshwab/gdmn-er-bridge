@@ -65,7 +65,7 @@ export abstract class Crud {
     });
   }
 
-  public static async returningRun(connection: AConnection, steps: Array<Step | setsThunk | detailsThunk>): Promise<number> {
+  private static async returningRun(connection: AConnection, steps: Array<Step | setsThunk | detailsThunk>): Promise<number> {
 
     const [returningStep, ...thunks] = steps;
 
@@ -74,7 +74,6 @@ export abstract class Crud {
       callback: async (transaction) => {
         const { sql, params } = returningStep as Step;
         const result = await connection.executeReturning(transaction, sql, params);
-        console.log("RETURNING id");
         return result;
       }
     });
