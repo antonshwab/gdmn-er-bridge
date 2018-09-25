@@ -22,7 +22,7 @@ function makeScalarsAndEntitiesSteps(entity, pk, scalarAttrsValues, entityAttrsV
         return [];
     }
     // TODO:
-    // How deal with complex primary keys?
+    // with complex primary keys?
     const pkNames = entity.pk.map(key => key.adapter.field);
     const pkParams = pkNames.reduce((acc, curr, currIndex) => {
         return {
