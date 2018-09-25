@@ -1,49 +1,50 @@
 import { ScalarAttribute, SetAttribute, DetailAttribute, EntityAttribute } from "gdmn-orm";
-import { Values, IAttributesByType, Scalar, IValue, ISetValue } from "./Crud";
+import { IAttrsValuesByType, AttrsValues, IScalarAttrValue, ISetAttrValue, IDetailAttrValue, IEntityAttrValue } from "./Crud";
 
-export function groupAttrsValuesByType(values: Values) {
-  const attrsByTypeAcc: IAttributesByType = {
-    scalars: [],
-    entities: [],
-    details: [],
-    sets: []
+export function groupAttrsValuesByType(attrsValues: AttrsValues) {
+
+  const byType: IAttrsValuesByType = {
+    scalarAttrsValues: [],
+    entityAttrsValues: [],
+    detailAttrsValues: [],
+    setAttrsValues: []
   };
 
-  return values.reduce((acc: IAttributesByType, currValue) => {
+  return attrsValues.reduce((acc: IAttrsValuesByType, curr) => {
 
-    if (ScalarAttribute.isType(currValue.attribute)) {
-      const scalars = [...acc.scalars, currValue as IValue<ScalarAttribute, Scalar>];
+    if (ScalarAttribute.isType(curr.attribute)) {
+      const scalarAttrsValues = [...acc.scalarAttrsValues, curr as IScalarAttrValue];
       return {
         ...acc,
-        scalars
+        scalarAttrsValues
       };
     }
 
-    if (SetAttribute.isType(currValue.attribute)) {
-      const sets = [...acc.sets, currValue as ISetValue];
+    if (SetAttribute.isType(curr.attribute)) {
+      const setAttrsValues = [...acc.setAttrsValues, curr as ISetAttrValue];
       return {
         ...acc,
-        sets
+        setAttrsValues
       };
     }
 
-    if (DetailAttribute.isType(currValue.attribute)) {
-      const details = [...acc.details, currValue as IValue<DetailAttribute, Scalar[][]>];
+    if (DetailAttribute.isType(curr.attribute)) {
+      const detailAttrsValues = [...acc.detailAttrsValues, curr as IDetailAttrValue];
       return {
         ...acc,
-        details
+        detailAttrsValues
       };
     }
 
-    if (EntityAttribute.isType(currValue.attribute)) {
-      const entities = [...acc.entities, currValue as IValue<EntityAttribute, Scalar[]>];
+    if (EntityAttribute.isType(curr.attribute)) {
+      const entityAttrsValues = [...acc.entityAttrsValues, curr as IEntityAttrValue];
       return {
         ...acc,
-        entities
+        entityAttrsValues
       };
     }
 
     throw new Error("Unknow attribute type");
 
-  }, attrsByTypeAcc);
+  }, byType);
 };

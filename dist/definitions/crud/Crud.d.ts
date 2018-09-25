@@ -1,13 +1,34 @@
-import { Entity, SetAttribute, DetailAttribute, Attribute, ScalarAttribute, EntityAttribute } from "gdmn-orm";
+import { Entity, SetAttribute, DetailAttribute, ScalarAttribute, EntityAttribute } from "gdmn-orm";
 import { AConnection } from "gdmn-db";
-import { setsThunk, detailsThunk } from "./Insert";
 export declare type Scalar = string | boolean | number | Date | null;
-export interface IValue<AttrType extends Attribute, valueType> {
-    attribute: AttrType;
-    value: valueType;
+export interface IScalarAttrValue {
+    attribute: ScalarAttribute;
+    value: Scalar;
 }
-export interface ISetValue extends IValue<SetAttribute, Scalar[]> {
-    setValues: Array<IValue<ScalarAttribute, Scalar>>;
+export interface IEntityAttrValue {
+    attribute: EntityAttribute;
+    values: Scalar[];
+}
+export interface ISetAttrValue {
+    attribute: SetAttribute;
+    crossValues: IScalarAttrValue[][];
+    currRefIDs?: number[];
+    refIDs: number[];
+}
+export interface IDetailAttrValue {
+    attribute: DetailAttribute;
+    pks: Scalar[][];
+}
+export interface IAttrsValuesByType {
+    scalarAttrsValues: IScalarAttrValue[];
+    entityAttrsValues: IEntityAttrValue[];
+    detailAttrsValues: IDetailAttrValue[];
+    setAttrsValues: ISetAttrValue[];
+}
+export declare type AttrsValues = Array<IScalarAttrValue | IEntityAttrValue | ISetAttrValue | IDetailAttrValue>;
+export interface IInsert {
+    entity: Entity;
+    attrsValues: AttrsValues;
 }
 export interface IUpdate extends IInsert {
     pk: any[];
@@ -15,30 +36,17 @@ export interface IUpdate extends IInsert {
 export interface IUpdateOrInsert extends IInsert {
     pk?: any[];
 }
-export declare type Values = Array<IValue<ScalarAttribute, Scalar> | IValue<EntityAttribute, Scalar[]> | IValue<DetailAttribute, Scalar[][]> | ISetValue>;
-export interface IInsert {
-    entity: Entity;
-    values: Values;
-}
 export interface IDelete {
     pk: any[];
     entity: Entity;
-}
-export interface IAttributesByType {
-    scalars: Array<IValue<ScalarAttribute, Scalar>>;
-    entities: Array<IValue<EntityAttribute, Scalar[]>>;
-    details: Array<IValue<DetailAttribute, Scalar[][]>>;
-    sets: Array<ISetValue>;
 }
 export declare type Step = {
     sql: string;
     params: {};
 };
 export declare abstract class Crud {
-    private static run;
-    static returningRun(connection: AConnection, steps: Array<Step | setsThunk | detailsThunk>): Promise<number>;
-    static executeInsert(connection: AConnection, input: IInsert): Promise<number>;
-    static executeUpdateOrInsert(connection: AConnection, input: IUpdateOrInsert): Promise<number>;
-    static executeUpdate(connection: AConnection, input: IUpdate): Promise<void>;
-    static executeDelete(connection: AConnection, input: IDelete): Promise<void>;
+    static executeInsert(connection: AConnection, input: IInsert | Array<IInsert>): Promise<number[]>;
+    static executeUpdateOrInsert(connection: AConnection, input: IUpdateOrInsert | Array<IUpdateOrInsert>): Promise<Array<number>>;
+    static executeUpdate(connection: AConnection, input: IUpdate | IUpdate[]): Promise<void>;
+    static executeDelete(connection: AConnection, input: IDelete | IDelete[]): Promise<void>;
 }

@@ -1,44 +1,87 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const Constants_1 = require("../ddl/Constants");
 const common_1 = require("./common");
-const Update_1 = require("./Update");
+// import { makeDetailsSteps } from "./Update";
+const lodash_1 = __importDefault(require("lodash"));
 function makeUpdateOrInsertSQL(tableName, attrsNames, placeholders) {
     const attrsNamesString = attrsNames.join(", ");
     const placeholdersString = placeholders.join(", ");
     return `UPDATE OR INSERT INTO ${tableName} (${attrsNamesString}) VALUES (${placeholdersString})`;
 }
-function makeSetsSteps(pk, sets) {
-    const steps = sets.map((currSet) => {
-        const { attribute, setValues } = currSet;
-        const restCrossTableAttrsParams = setValues.reduce((acc, currValue) => {
-            return { ...acc, [currValue.attribute.name]: currValue.value };
+// similar to update's or insert's makedetailattrssteps
+function makeDetailAttrsSteps(masterKeyValue, detailAttrsValues) {
+    const detailsSteps = detailAttrsValues.map(currDetailAttrValues => {
+        const currDetailAttr = currDetailAttrValues.attribute;
+        const [detailEntity] = currDetailAttr.entities;
+        const detailRelation = currDetailAttr.adapter ?
+            currDetailAttr.adapter.masterLinks[0].detailRelation :
+            detailEntity.attribute.name;
+        const link2masterField = currDetailAttr.adapter ?
+            currDetailAttr.adapter.masterLinks[0].link2masterField :
+            Constants_1.Constants.DEFAULT_MASTER_KEY_NAME;
+        const parts = currDetailAttrValues.pks.map((pk, pkIndex) => {
+            const pKeyNames = detailEntity.pk.map(k => k.name);
+            const sqlPart = pKeyNames
+                .map(name => `${name} = :${name}${pkIndex}`)
+                .join(" AND ");
+            const params = pKeyNames.reduce((acc, currName, currIndex) => {
+                return { ...acc, [`${currName}${pkIndex}`]: pk[currIndex] };
+            }, {});
+            return { sqlPart, params };
+        });
+        const whereParams = parts.reduce((acc, part) => {
+            return { ...acc, ...part.params };
         }, {});
-        const [crossPKOwnValue] = pk;
-        const [crossPKRefValue] = currSet.value;
-        const params = {
-            [Constants_1.Constants.DEFAULT_CROSS_PK_OWN_NAME]: crossPKOwnValue,
-            [Constants_1.Constants.DEFAULT_CROSS_PK_REF_NAME]: crossPKRefValue,
-            ...restCrossTableAttrsParams
-        };
-        const attrsNames = Object.keys(params);
-        const placeholders = attrsNames.map(name => `:${name}`);
-        const crossTableName = attribute.adapter ? attribute.adapter.crossRelation : attribute.name;
-        const sql = makeUpdateOrInsertSQL(crossTableName, attrsNames, placeholders);
-        const step = { sql, params };
+        const whereSQL = parts.map(part => part.sqlPart).join(" OR ");
+        const sql = `UPDATE ${detailRelation} SET ${link2masterField} = (${masterKeyValue}) WHERE ${whereSQL}`;
+        const step = { sql, params: whereParams };
         return step;
     });
-    return steps;
+    console.log("details steps: (update)", detailsSteps);
+    return detailsSteps;
 }
-function makeScalarsEntitiesSteps(entity, pk, scalars, entities) {
-    const scalarsEntities = [...scalars, ...entities];
-    if (scalarsEntities.length === 0) {
+function makeSetAttrsSteps(crossPKOwn, setAttrsValues) {
+    const steps = setAttrsValues.map(currSetAttrValue => {
+        const { crossValues, refIDs } = currSetAttrValue;
+        const innerSteps = refIDs.map((currRefID, index) => {
+            const currValues = crossValues[index] || [];
+            const restCrossAttrsParams = currValues.reduce((acc, curr) => {
+                return { ...acc, [curr.attribute.name]: curr.value };
+            }, {});
+            const params = {
+                [Constants_1.Constants.DEFAULT_CROSS_PK_OWN_NAME]: crossPKOwn,
+                [Constants_1.Constants.DEFAULT_CROSS_PK_REF_NAME]: currRefID,
+                ...restCrossAttrsParams
+            };
+            const attrsNames = Object.keys(params);
+            const placeholders = attrsNames.map(name => `:${name}`);
+            let crossTableName;
+            if (currSetAttrValue.attribute.adapter) {
+                crossTableName = currSetAttrValue.attribute.adapter.crossRelation;
+            }
+            else {
+                crossTableName = currSetAttrValue.attribute.name;
+            }
+            const sql = makeUpdateOrInsertSQL(crossTableName, attrsNames, placeholders);
+            const step = { sql, params };
+            return step;
+        });
+        return innerSteps;
+    });
+    const flatten = lodash_1.default.flatten(steps);
+    console.log("(udpateOrInsert) SetAttrsSteps: ", flatten);
+    return flatten;
+}
+function makeScalarsAndEntitiesSteps(entity, pk, scalarAttrsValues, entityAttrsValues) {
+    if (scalarAttrsValues.length === 0 && entityAttrsValues.length === 0) {
         return [];
     }
-    // TODO: Consider other primary keys
-    // How with complex primary keys? pk has value and values in IValue has a value too
-    // which values to choose?
-    // console.log("primary keys: ", JSON.stringify(entity.pk));
+    // TODO:
+    // How deal with complex primary keys?
     const pkNames = entity.pk.map(key => key.adapter.field);
     const pkParams = pkNames.reduce((acc, curr, currIndex) => {
         return {
@@ -46,31 +89,34 @@ function makeScalarsEntitiesSteps(entity, pk, scalars, entities) {
             [curr]: pk[currIndex]
         };
     }, {});
-    const pkPlaceholders = pkNames.map(key => `:${key}`);
-    const restParams = scalarsEntities.reduce((acc, currValue) => {
-        if (Array.isArray(currValue.value)) {
-            const [value] = currValue.value;
-            return { ...acc, [currValue.attribute.name]: value };
-        }
-        return { ...acc, [currValue.attribute.name]: currValue.value };
+    const scalarAttrsValuesParams = scalarAttrsValues.reduce((acc, curr) => {
+        return { ...acc, [curr.attribute.name]: curr.value };
     }, {});
-    const params = { ...pkParams, ...restParams };
-    const restNames = Object.keys(restParams);
-    const names = [...pkNames, ...restNames];
-    const restPlaceholders = restNames.map((name) => `:${name}`);
-    const placeholders = [...pkPlaceholders, ...restPlaceholders];
+    const entityAttrsValuesParams = entityAttrsValues.reduce((acc, curr) => {
+        return { ...acc, [curr.attribute.name]: curr.values[0] };
+    }, {});
+    const params = { ...pkParams, ...scalarAttrsValuesParams, ...entityAttrsValuesParams };
+    const scalarAttrsNames = Object.keys(scalarAttrsValuesParams);
+    const entityAttrsNames = Object.keys(entityAttrsValuesParams);
+    const names = [
+        ...pkNames,
+        ...scalarAttrsNames,
+        ...entityAttrsNames
+    ];
+    const placeholders = names.map(name => `:${name}`);
     const sql = makeUpdateOrInsertSQL(entity.name, names, placeholders);
+    // TODO: sql always the same, this is space for optimization.
     const steps = [{ sql, params }];
     return steps;
 }
 function buildUpdateOrInsertSteps(input) {
-    const { entity, values } = input;
+    const { entity, attrsValues } = input;
     const pk = input.pk;
-    const { scalars, entities, sets, details } = common_1.groupAttrsValuesByType(values);
-    const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars, entities);
-    const detailsSteps = Update_1.makeDetailsSteps(pk, details);
-    const setsSteps = makeSetsSteps(pk, sets);
-    const steps = [...scalarsEntitiesSteps, ...setsSteps, ...detailsSteps];
+    const { scalarAttrsValues, entityAttrsValues, setAttrsValues, detailAttrsValues } = common_1.groupAttrsValuesByType(attrsValues);
+    const scalarsAndEntitiesSteps = makeScalarsAndEntitiesSteps(entity, pk, scalarAttrsValues, entityAttrsValues);
+    const setsSteps = makeSetAttrsSteps(pk[0], setAttrsValues);
+    const detailsSteps = makeDetailAttrsSteps(pk[0], detailAttrsValues);
+    const steps = [...scalarsAndEntitiesSteps, ...setsSteps, ...detailsSteps];
     console.log("steps for updateOrInsert: ", steps);
     return steps;
 }

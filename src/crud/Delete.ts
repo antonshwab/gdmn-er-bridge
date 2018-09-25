@@ -14,9 +14,8 @@ export function buildDeleteSteps(input: IDelete): Step[] {
     };
   }, {});
 
-  const wherePart = pkNames.map((name) => `${name} = :${name}`).join(" AND ");
+  const wherePart = pkNames.map(name => `${name} = :${name}`).join(" AND ");
   const sql = `DELETE FROM ${entity.name} WHERE ${wherePart}`;
-
   const mainStep = { sql, params };
 
   const attributesNames = Object.keys(entity.attributes);
@@ -49,7 +48,9 @@ export function buildDeleteSteps(input: IDelete): Step[] {
       Constants.DEFAULT_MASTER_KEY_NAME;
 
     const wherePart = `${link2masterField} = :${link2masterField}`;
-    const sql = `DELETE FROM ${detailRelation} WHERE ${wherePart}`;
+    // const sql = `DELETE FROM ${detailRelation} WHERE ${wherePart}`;
+    const setPart = `${link2masterField} = NULL`;
+    const sql = `UPDATE ${detailRelation} SET ${setPart} WHERE ${wherePart}`;
     const [masterID] = pkValues;
     const params = {
       [link2masterField]: masterID

@@ -1,44 +1,44 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const gdmn_orm_1 = require("gdmn-orm");
-function groupAttrsValuesByType(values) {
-    const attrsByTypeAcc = {
-        scalars: [],
-        entities: [],
-        details: [],
-        sets: []
+function groupAttrsValuesByType(attrsValues) {
+    const byType = {
+        scalarAttrsValues: [],
+        entityAttrsValues: [],
+        detailAttrsValues: [],
+        setAttrsValues: []
     };
-    return values.reduce((acc, currValue) => {
-        if (gdmn_orm_1.ScalarAttribute.isType(currValue.attribute)) {
-            const scalars = [...acc.scalars, currValue];
+    return attrsValues.reduce((acc, curr) => {
+        if (gdmn_orm_1.ScalarAttribute.isType(curr.attribute)) {
+            const scalarAttrsValues = [...acc.scalarAttrsValues, curr];
             return {
                 ...acc,
-                scalars
+                scalarAttrsValues
             };
         }
-        if (gdmn_orm_1.SetAttribute.isType(currValue.attribute)) {
-            const sets = [...acc.sets, currValue];
+        if (gdmn_orm_1.SetAttribute.isType(curr.attribute)) {
+            const setAttrsValues = [...acc.setAttrsValues, curr];
             return {
                 ...acc,
-                sets
+                setAttrsValues
             };
         }
-        if (gdmn_orm_1.DetailAttribute.isType(currValue.attribute)) {
-            const details = [...acc.details, currValue];
+        if (gdmn_orm_1.DetailAttribute.isType(curr.attribute)) {
+            const detailAttrsValues = [...acc.detailAttrsValues, curr];
             return {
                 ...acc,
-                details
+                detailAttrsValues
             };
         }
-        if (gdmn_orm_1.EntityAttribute.isType(currValue.attribute)) {
-            const entities = [...acc.entities, currValue];
+        if (gdmn_orm_1.EntityAttribute.isType(curr.attribute)) {
+            const entityAttrsValues = [...acc.entityAttrsValues, curr];
             return {
                 ...acc,
-                entities
+                entityAttrsValues
             };
         }
         throw new Error("Unknow attribute type");
-    }, attrsByTypeAcc);
+    }, byType);
 }
 exports.groupAttrsValuesByType = groupAttrsValuesByType;
 ;

@@ -1,7 +1,7 @@
 import { AConnection } from "gdmn-db";
 import { ERBridge } from "../src/ERBridge";
 import { ERModel, MAX_16BIT_INT, MIN_16BIT_INT, Entity, IntegerAttribute, StringAttribute, TimeStampAttribute, EntityAttribute, SetAttribute, ScalarAttribute, DetailAttribute } from "gdmn-orm";
-import { IInsert, IValue, Scalar, Crud, ISetValue, IUpdateOrInsert, } from "../src/crud/Crud";
+import { IInsert, Scalar, Crud, IUpdateOrInsert, IScalarAttrValue, IEntityAttrValue, ISetAttrValue, IDetailAttrValue, } from "../src/crud/Crud";
 import { Constants } from "../src/ddl/Constants";
 
 export function testInsert(
@@ -19,86 +19,17 @@ export function testInsert(
       }
     });
 
-    it("Insert Scalars", async () => {
-      const entityName = "TEST";
-      const field1Name = "FIELD1";
-      const field2Name = "FIELD2";
-
-      const erModel: ERModel = await initERModelBuilder(async (builder) => {
-        const erModel = await builder.initERModel();
-        const entity = await builder.addEntity(erModel, new Entity({
-          name: entityName,
-          lName: { ru: { name: "entity name", fullName: "full entity name" } }
-        }));
-
-        await builder.entityBuilder.addAttribute(entity, new IntegerAttribute({
-          name: field1Name, lName: { ru: { name: "Поле 1", fullName: "FULLNAME" } }, required: true,
-          minValue: MIN_16BIT_INT, maxValue: MAX_16BIT_INT, defaultValue: -10000,
-        }));
-
-        await builder.entityBuilder.addAttribute(entity, new StringAttribute({
-          name: field2Name, lName: { ru: { name: "Поле 2" } },
-          minLength: 1, maxLength: 160, defaultValue: "test default", autoTrim: true
-        }));
-
-        return erModel;
-      });
-
-      const entity = erModel.entity("TEST");
-      const field1Attribute = entity.attribute(field1Name);
-      const field2Attriubte = entity.attribute(field2Name);
-
-      const field1Value: IValue<ScalarAttribute, Scalar> = {
-        attribute: field1Attribute,
-        value: 777
-      };
-      const field2Value: IValue<ScalarAttribute, Scalar> = {
-        attribute: field2Attriubte,
-        value: "iamstring"
-      };
-
-      const insert: IInsert = {
-        entity,
-        values: [field1Value, field2Value]
-      };
-
-      await Crud.executeInsert(connection, insert);
-
-      await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const selectSql = `SELECT FIRST 1 t.${field1Name}, t.${field2Name} FROM ${entity.name} t`;
-          const result = await connection.executeReturning(transaction, selectSql);
-
-          const insertedField1 = result.getNumber("FIELD1");
-          expect(insertedField1).toEqual(field1Value.value);
-
-          const insertedField2 = result.getString("FIELD2");
-          expect(insertedField2).toEqual(field2Value.value);
-        }
-      });
-
-    });
-
-    it("insert Scalars, Entities attribute values", async () => {
-      const entityName = "TEST";
-
+    it("Insert in batch mode", async () => {
       const erModel: ERModel = await initERModelBuilder(async (builder) => {
         const erModel = await builder.initERModel();
 
         const appEntity = await builder.addEntity(erModel, new Entity({
           name: "APPLICATION", lName: { ru: { name: "Приложение" } }
         }));
-
         await builder.entityBuilder.addAttribute(appEntity, new StringAttribute({
           name: "UID", lName: { ru: { name: "Идентификатор приложения" } }, required: true, minLength: 1, maxLength: 36
         }));
-
         await builder.entityBuilder.addUnique(appEntity, [appEntity.attribute("UID")]);
-
-        await builder.entityBuilder.addAttribute(appEntity, new TimeStampAttribute({
-          name: "CREATIONDATE", lName: { ru: { name: "Дата создания" } }, required: true, defaultValue: "CURRENT_TIMESTAMP"
-        }));
 
         const backupEntity = await builder.addEntity(erModel, new Entity({
           name: "APPLICATION_BACKUPS", lName: { ru: { name: "Бэкап" } }
@@ -106,217 +37,48 @@ export function testInsert(
         await builder.entityBuilder.addAttribute(backupEntity, new StringAttribute({
           name: "UID", lName: { ru: { name: "Идентификатор бэкапа" } }, required: true, minLength: 1, maxLength: 36
         }));
-
         await builder.entityBuilder.addUnique(backupEntity, [backupEntity.attribute("UID")]);
-
         await builder.entityBuilder.addAttribute(backupEntity,
           new EntityAttribute({
             name: "APP", lName: { ru: { name: " " } }, required: true, entities: [appEntity]
           })
         );
-
         await builder.entityBuilder.addAttribute(backupEntity, new StringAttribute({
           name: "ALIAS", lName: { ru: { name: "Название бэкапа" } }, required: true, minLength: 1, maxLength: 120
         }));
 
-        await builder.entityBuilder.addAttribute(backupEntity, new TimeStampAttribute({
-          name: "CREATIONDATE", lName: { ru: { name: "Дата создания" } }, required: true, defaultValue: "CURRENT_TIMESTAMP"
+        const placeEntity = await builder.addEntity(erModel, new Entity({ name: "PLACE", lName: { ru: { name: "Место" } } }));
+        await builder.entityBuilder.addAttribute(placeEntity, new StringAttribute({
+          name: "ADDRESS", lName: { ru: { name: "Адрес" } }, required: true, minLength: 1, maxLength: 100
         }));
 
-        return erModel;
-      });
-
-      const appEntity = erModel.entity("APPLICATION");
-      const appBackupEntity = erModel.entity("APPLICATION_BACKUPS");
-      const appUidAttribute = appEntity.attribute("UID");
-      const backupEntityAttribute = appBackupEntity.attribute("APP") as EntityAttribute;
-      const backupUidAttribute = appBackupEntity.attribute("UID");
-      const backupAliasAttribute = appBackupEntity.attribute("ALIAS");
-
-      const appUidValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: appUidAttribute,
-        value: "uniqueuid"
-      };
-      const insertApp: IInsert = {
-        entity: appEntity,
-        values: [appUidValue]
-      };
-
-      const appId = await Crud.executeInsert(connection, insertApp);
-
-      const appIdValue: IValue<EntityAttribute, Scalar[]> = {
-        attribute: backupEntityAttribute,
-        value: [appId]
-      };
-
-      const backupUidValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: backupUidAttribute,
-        value: "uniqueuid"
-      };
-
-      const backupAliasValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: backupAliasAttribute,
-        value: "alias"
-      };
-
-      const insertBackup: IInsert = {
-        entity: appBackupEntity,
-        values: [appIdValue, backupUidValue, backupAliasValue]
-      };
-
-      const backupID = await Crud.executeInsert(connection, insertBackup);
-
-      await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const selectSql = `SELECT FIRST 1 bkp.UID, bkp.ALIAS, bkp.APP FROM APPLICATION_BACKUPS bkp WHERE bkp.ID = ${backupID}`;
-
-          const result = await connection.executeReturning(transaction, selectSql);
-
-          const uid = result.getString(backupUidAttribute.name);
-          expect(uid).toEqual(backupUidValue.value);
-
-          const alias = result.getString(backupAliasAttribute.name);
-          expect(alias).toEqual(backupAliasValue.value);
-
-          const app = result.getNumber(backupEntityAttribute.name);
-          expect(app).toEqual(appIdValue.value[0]);
-        }
-      });
-    });
-
-    it("insert with SetAttribute", async () => {
-      const erModel: ERModel = await initERModelBuilder(async (builder) => {
-        const erModel = await builder.initERModel();
-
-        // APPLICATION
-        const appEntity = await builder.addEntity(erModel, new Entity({
-          name: "APPLICATION", lName: { ru: { name: "Приложение" } }
-        }));
-
-        await builder.entityBuilder.addAttribute(appEntity, new StringAttribute({
-          name: "UID", lName: { ru: { name: "Идентификатор приложения" } }, required: true,
-          minLength: 1, maxLength: 36
-        }));
-        await builder.entityBuilder.addUnique(appEntity, [appEntity.attribute("UID")]);
-
-        await builder.entityBuilder.addAttribute(appEntity, new TimeStampAttribute({
-          name: "CREATIONDATE", lName: { ru: { name: "Дата создания" } }, required: true, defaultValue: "CURRENT_TIMESTAMP"
-        }));
 
         const userEntity = await builder.addEntity(erModel, new Entity({
           name: "APP_USER", lName: { ru: { name: "Пользователь" } }
         }));
-
         const userLogin = await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
           name: "LOGIN", lName: { ru: { name: "Логин" } }, required: true, minLength: 1,
           maxLength: 32
         }));
-
         const appSet = new SetAttribute({
           name: "APPLICATIONS", lName: { ru: { name: "Приложения" } }, entities: [appEntity],
           adapter: { crossRelation: "APP_USER_APPLICATIONS" }
         });
-
         appSet.add(new StringAttribute({
           name: "ALIAS", lName: { ru: { name: "Название приложения" } }, required: true, minLength: 1, maxLength: 120
         }));
-
         await builder.entityBuilder.addAttribute(userEntity, appSet);
 
-        return erModel;
-      });
-
-      const userEntity = erModel.entity("APP_USER");
-      const appEntity = erModel.entity("APPLICATION");
-
-      const appUIDValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: appEntity.attribute("UID"),
-        value: "uniqueUID"
-      };
-      const appInsert: IInsert = {
-        entity: appEntity,
-        values: [appUIDValue]
-      };
-
-      const appId = await Crud.executeInsert(connection, appInsert);
-
-      const appSetAttribute: SetAttribute = userEntity.attribute("APPLICATIONS") as SetAttribute;
-      const appAliasAttribute: ScalarAttribute = appSetAttribute.attribute("ALIAS");
-      const appAliasValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: appAliasAttribute,
-        value: "appalias"
-      };
-      const loginAttributeValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: userEntity.attribute("LOGIN"),
-        value: "imLogin"
-      };
-      const appSetValue: ISetValue = {
-        attribute: appSetAttribute,
-        setValues: [appAliasValue],
-        value: [appId]
-      };
-      const userInsert: IInsert = {
-        entity: userEntity,
-        values: [loginAttributeValue, appSetValue]
-      };
-
-      const insertedUserID = await Crud.executeInsert(connection, userInsert);
-
-      await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-
-          const getInsertedUserSQL = `SELECT * FROM ${userEntity.name} WHERE ID = ${insertedUserID}`;
-
-          const getInsertedUserParams = { login: loginAttributeValue.value };
-          const userResult = await connection.executeReturning(
-            transaction,
-            getInsertedUserSQL,
-            getInsertedUserParams);
-          const insertedLogin = userResult.getString("LOGIN");
-          expect(insertedLogin).toEqual(loginAttributeValue.value);
-
-          const crossRelation = appSetAttribute.adapter.crossRelation;
-          const crossSQL = `SELECT FIRST 1 * FROM ${crossRelation} where ${Constants.DEFAULT_CROSS_PK_OWN_NAME} = ${insertedUserID}`;
-          const crossResult = await connection.executeReturning(
-            transaction,
-            crossSQL
-          );
-          const crossOwnKeyValue = crossResult.getNumber(Constants.DEFAULT_CROSS_PK_OWN_NAME);
-          expect(crossOwnKeyValue).toEqual(insertedUserID);
-          const crossRefKeyValue = crossResult.getNumber(Constants.DEFAULT_CROSS_PK_REF_NAME);
-          expect(crossRefKeyValue).toEqual(appId);
-          const crossAliasValue = crossResult.getString(appAliasValue.attribute.name);
-          expect(crossAliasValue).toEqual(appAliasValue.value);
-        }
-      });
-    });
-
-    it("insert with DetailAttriubute", async () => {
-      const erModel: ERModel = await initERModelBuilder(async (builder) => {
-        const erModel = await builder.initERModel();
-
-        const placeEntity = await builder.addEntity(erModel, new Entity({ name: "PLACE", lName: { ru: { name: "Место" } } }));
-        await builder.entityBuilder.addAttribute(placeEntity, new StringAttribute({
-          name: "ADDRESS", lName: { ru: { name: "Адрес" } }
+        await builder.entityBuilder.addAttribute(userEntity, new EntityAttribute({
+          name: "PLACE", lName: {}, entities: [placeEntity]
         }));
-
-        const userEntity = await builder.addEntity(erModel, new Entity({ name: "USER_ENTITY", lName: { ru: { name: "Пользователь" } } }));
-
-        await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
-          name: "NAME", lName: { ru: { name: "Имя пользователя" } }, required: true,
-          minLength: 1, maxLength: 36
-        }));
-        await builder.entityBuilder.addUnique(userEntity, [userEntity.attribute("NAME")]);
-
-        await builder.entityBuilder.addAttribute(userEntity, new EntityAttribute({ name: "PLACE", lName: {}, entities: [placeEntity] }));
-
         await builder.entityBuilder.addAttribute(userEntity, new DetailAttribute({
-          name: "DETAIL_PLACE", lName: { ru: { name: "Детальное место" } }, required: false, entities: [placeEntity], adapter: {
+          name: "DETAIL_PLACE", lName: { ru: { name: "Детальное место" } },
+          required: false, entities: [placeEntity],
+          adapter: {
             masterLinks: [{
               detailRelation: placeEntity.name,
-              link2masterField: "MASTER_KEY"
+              link2masterField: Constants.DEFAULT_MASTER_KEY_NAME
             }]
           }
         }));
@@ -324,71 +86,391 @@ export function testInsert(
         return erModel;
       });
 
-      const placeEntity = erModel.entity("PLACE");
-      const placeAddressAttribute = placeEntity.attribute("ADDRESS");
 
-      const placeAddressValue1: IValue<ScalarAttribute, Scalar> = {
-        attribute: placeAddressAttribute,
+      const appEntity = erModel.entity("APPLICATION");
+
+      const appUIDValue1: IScalarAttrValue = {
+        attribute: appEntity.attribute("UID"),
+        value: "uid1"
+      };
+      const app1: IInsert = {
+        entity: appEntity,
+        attrsValues: [appUIDValue1]
+      };
+
+      const appUIDValue2: IScalarAttrValue = {
+        attribute: appEntity.attribute("UID"),
+        value: "uid2"
+      };
+      const app2: IInsert = {
+        entity: appEntity,
+        attrsValues: [appUIDValue2]
+      };
+
+      const appUIDValue3: IScalarAttrValue = {
+        attribute: appEntity.attribute("UID"),
+        value: "uid3"
+      };
+      const app3: IInsert = {
+        entity: appEntity,
+        attrsValues: [appUIDValue3]
+      };
+
+      const appUIDValue4: IScalarAttrValue = {
+        attribute: appEntity.attribute("UID"),
+        value: "uid4"
+      };
+      const app4: IInsert = {
+        entity: appEntity,
+        attrsValues: [appUIDValue4]
+      };
+
+      const appUIDValue5: IScalarAttrValue = {
+        attribute: appEntity.attribute("UID"),
+        value: "uid5"
+      };
+      const app5: IInsert = {
+        entity: appEntity,
+        attrsValues: [appUIDValue5]
+      };
+
+      const apps = [app1, app2, app3, app4, app5];
+      const appIDs = await Crud.executeInsert(connection, apps);
+
+
+      const backupEntity = erModel.entity("APPLICATION_BACKUPS");
+
+      const appIDValue1: IEntityAttrValue = {
+        attribute: backupEntity.attribute("APP") as EntityAttribute,
+        values: [appIDs[0]]
+      };
+      const backupUIDValue1: IScalarAttrValue = {
+        attribute: backupEntity.attribute("UID"),
+        value: "uid1"
+      };
+      const backupAliasValue1: IScalarAttrValue = {
+        attribute: backupEntity.attribute("ALIAS"),
+        value: "alias1"
+      };
+      const insertBackup1: IInsert = {
+        entity: backupEntity,
+        attrsValues: [appIDValue1, backupUIDValue1, backupAliasValue1]
+      };
+      const appIDValue2: IEntityAttrValue = {
+        attribute: backupEntity.attribute("APP") as EntityAttribute,
+        values: [appIDs[1]]
+      };
+      const backupUIDValue2: IScalarAttrValue = {
+        attribute: backupEntity.attribute("UID"),
+        value: "uid2"
+      };
+      const backupAliasValue2: IScalarAttrValue = {
+        attribute: backupEntity.attribute("ALIAS"),
+        value: "alias2"
+      };
+      const insertBackup2: IInsert = {
+        entity: backupEntity,
+        attrsValues: [appIDValue2, backupUIDValue2, backupAliasValue2]
+      };
+      const appIDValue3: IEntityAttrValue = {
+        attribute: backupEntity.attribute("APP") as EntityAttribute,
+        values: [appIDs[2]]
+      };
+      const backupUIDValue3: IScalarAttrValue = {
+        attribute: backupEntity.attribute("UID"),
+        value: "uid3"
+      };
+      const backupAliasValue3: IScalarAttrValue = {
+        attribute: backupEntity.attribute("ALIAS"),
+        value: "alias3"
+      };
+      const insertBackup3: IInsert = {
+        entity: backupEntity,
+        attrsValues: [appIDValue3, backupUIDValue3, backupAliasValue3]
+      };
+
+      const backups = [insertBackup1, insertBackup2, insertBackup3];
+      const backupsIDs = await Crud.executeInsert(connection, backups);
+
+
+      const placeEntity = erModel.entity("PLACE");
+
+      const placeAddressValue1: IScalarAttrValue = {
+        attribute: placeEntity.attribute("ADDRESS"),
         value: "address1"
       };
       const placeInsert1: IInsert = {
         entity: placeEntity,
-        values: [placeAddressValue1]
+        attrsValues: [placeAddressValue1]
       };
 
-      const place1ID = await Crud.executeInsert(connection, placeInsert1);
-
-      const placeAddressValue2: IValue<ScalarAttribute, Scalar> = {
-        attribute: placeAddressAttribute,
+      const placeAddressValue2: IScalarAttrValue = {
+        attribute: placeEntity.attribute("ADDRESS"),
         value: "address2"
       };
       const placeInsert2: IInsert = {
         entity: placeEntity,
-        values: [placeAddressValue2]
+        attrsValues: [placeAddressValue2]
       };
 
-      const place2ID = await Crud.executeInsert(connection, placeInsert2);
-
-      const userEntity = erModel.entity("USER_ENTITY");
-      const userNameAttr = userEntity.attribute("NAME");
-      const userNameValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: userNameAttr,
-        value: "username"
+      const placeAddressValue3: IScalarAttrValue = {
+        attribute: placeEntity.attribute("ADDRESS"),
+        value: "address3"
+      };
+      const placeInsert3: IInsert = {
+        entity: placeEntity,
+        attrsValues: [placeAddressValue3]
       };
 
-      const detailPlaceAttr = userEntity.attribute("DETAIL_PLACE") as DetailAttribute;
-      const placeValue: IValue<DetailAttribute, Scalar[][]> = {
-        attribute: detailPlaceAttr,
-        value: [[place1ID], [place2ID]]
+      const placeAddressValue4: IScalarAttrValue = {
+        attribute: placeEntity.attribute("ADDRESS"),
+        value: "address4"
+      };
+      const placeInsert4: IInsert = {
+        entity: placeEntity,
+        attrsValues: [placeAddressValue4]
       };
 
-      const userInsert: IInsert = {
+      const placeAddressValue5: IScalarAttrValue = {
+        attribute: placeEntity.attribute("ADDRESS"),
+        value: "address5"
+      };
+      const placeInsert5: IInsert = {
+        entity: placeEntity,
+        attrsValues: [placeAddressValue5]
+      };
+
+      const places = [placeInsert1, placeInsert2, placeInsert3, placeInsert4, placeInsert5];
+      const placesIDs = await Crud.executeInsert(connection, places);
+
+
+      const userEntity = erModel.entity("APP_USER");
+      const appSetAttribute: SetAttribute = userEntity.attribute("APPLICATIONS") as SetAttribute;
+
+
+      const appAliasValue1: IScalarAttrValue = {
+        attribute: appSetAttribute.attribute("ALIAS"),
+        value: "alias1"
+      };
+      const appAliasValue2: IScalarAttrValue = {
+        attribute: appSetAttribute.attribute("ALIAS"),
+        value: "alias2"
+      };
+      const appAliasValue3: IScalarAttrValue = {
+        attribute: appSetAttribute.attribute("ALIAS"),
+        value: "alias3"
+      };
+      const userAppSetAttrValue1: ISetAttrValue = {
+        attribute: appSetAttribute,
+        crossValues: [[appAliasValue1], [appAliasValue2], [appAliasValue3]],
+        refIDs: [appIDs[0], appIDs[1], appIDs[2]]
+      };
+
+      const userLoginAttrValue1: IScalarAttrValue = {
+        attribute: userEntity.attribute("LOGIN"),
+        value: "login1"
+      };
+
+      const userPlaceDetailAttrValue1: IDetailAttrValue = {
+        attribute: userEntity.attribute("DETAIL_PLACE") as DetailAttribute,
+        pks: [[placesIDs[0]], [placesIDs[1]]]
+      };
+
+      const userInsert1: IInsert = {
         entity: userEntity,
-        values: [userNameValue, placeValue]
+        attrsValues: [userLoginAttrValue1, userAppSetAttrValue1, userPlaceDetailAttrValue1]
       };
 
-      const userID = await Crud.executeInsert(connection, userInsert);
+
+      const appAliasValue4: IScalarAttrValue = {
+        attribute: appSetAttribute.attribute("ALIAS"),
+        value: "alias4"
+      };
+      const appAliasValue5: IScalarAttrValue = {
+        attribute: appSetAttribute.attribute("ALIAS"),
+        value: "alias5"
+      };
+      const userAppSetAttrValue2 = {
+        attribute: appSetAttribute,
+        crossValues: [[appAliasValue4], [appAliasValue5]],
+        refIDs: [appIDs[3], appIDs[4]]
+      };
+
+      const userLoginAttrValue2: IScalarAttrValue = {
+        attribute: userEntity.attribute("LOGIN"),
+        value: "login2"
+      };
+
+      const userPlaceDetailAttrValue2: IDetailAttrValue = {
+        attribute: userEntity.attribute("DETAIL_PLACE") as DetailAttribute,
+        pks: [[placesIDs[2]], [placesIDs[3]], [placesIDs[4]]]
+      };
+
+      const userInsert2: IInsert = {
+        entity: userEntity,
+        attrsValues: [userLoginAttrValue2, userAppSetAttrValue2, userPlaceDetailAttrValue2]
+      };
+
+      const users = [userInsert1, userInsert2];
+      const usersIDs = await Crud.executeInsert(connection, users);
 
       await AConnection.executeTransaction({
         connection,
         callback: async (transaction) => {
-          const insertedUserSQL = `SELECT * FROM ${userEntity.name} WHERE ID = ${userID}`;
 
-          const userResult = await connection.executeReturning(transaction, insertedUserSQL);
-          const insertedUsername = userResult.getString("NAME");
-          expect(insertedUsername).toEqual(userNameValue.value);
-        }
-      });
+          const appsSQL = `SELECT * FROM ${appEntity.name} WHERE
+          ID = :appID1 OR ID = :appID2 OR ID = :appID3 OR ID = :appID4 OR ID = :appID5`;
 
-      await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT * FROM ${placeEntity.name} WHERE MASTER_KEY = ${userID}`;
-          const userResult = await connection.executeQuery(transaction, sql);
-          while (await userResult.next()) {
-            expect(userResult.getNumber("MASTER_KEY")).toEqual(userID);
+          const appsIDParams = {
+            appID1: appIDs[0],
+            appID2: appIDs[1],
+            appID3: appIDs[2],
+            appID4: appIDs[3],
+            appID5: appIDs[4]
+          };
+
+          const appsResult = await connection.executeQuery(
+            transaction,
+            appsSQL,
+            appsIDParams
+          );
+
+          for (const i in appIDs) {
+            // console.log("i: ", i);
+            await appsResult.next();
+            const insertedUID = appsResult.getString("UID");
+            // console.log("insertedUID: ", insertedUID);
+
+            const [expectedUID] = apps[i].attrsValues as IScalarAttrValue[];
+            // console.log("expectedUID: ", expectedUID);
+
+            expect(insertedUID).toEqual(expectedUID.value);
           }
-          await userResult.close();
+
+          const backupsSQL = `SELECT * FROM ${backupEntity.name} WHERE
+          ID = :backupID1 OR ID = :backupID2 OR ID = :backupID3`;
+          const backupsIDParams = {
+            backupID1: backupsIDs[0],
+            backupID2: backupsIDs[1],
+            backupID3: backupsIDs[2]
+          };
+
+          const backupsResult = await connection.executeQuery(
+            transaction,
+            backupsSQL,
+            backupsIDParams
+          );
+
+          for (const i in backupsIDs) {
+            await backupsResult.next();
+            const insertedAppID = backupsResult.getNumber("APP");
+            const insertedUID = backupsResult.getString("UID");
+            const insertedAlias = backupsResult.getString("ALIAS");
+            const expectedAppID = backups[i].attrsValues[0] as IEntityAttrValue;
+
+            const [, expectedBackupUID, expectedBackupAlias] = backups[i].attrsValues as IScalarAttrValue[];
+
+            expect(insertedAppID).toEqual(expectedAppID.values[0]);
+            expect(insertedUID).toEqual(expectedBackupUID.value);
+            expect(insertedAlias).toEqual(expectedBackupAlias.value);
+          }
+
+
+          const placesSQL = `SELECT * FROM ${placeEntity.name} WHERE
+          ID = :placeID1 OR ID = :placeID2 OR ID = :placeID3 OR ID = :placeID4 OR ID = :placeID5`;
+          const placesIDParams = {
+            placeID1: placesIDs[0],
+            placeID2: placesIDs[1],
+            placeID3: placesIDs[2],
+            placeID4: placesIDs[3],
+            placeID5: placesIDs[4]
+          };
+
+          const placesResult = await connection.executeQuery(
+            transaction,
+            placesSQL,
+            placesIDParams
+          );
+
+          for (const i in placesIDs) {
+            await placesResult.next();
+            const insertedAddress = placesResult.getString("ADDRESS");
+            const masterkey = placesResult.getNumber(Constants.DEFAULT_MASTER_KEY_NAME);
+            const expectedAddress = places[i].attrsValues[0] as IScalarAttrValue;
+            expect(insertedAddress).toEqual(expectedAddress.value);
+            if (Number(i) < 2) {
+              expect(masterkey).toEqual(usersIDs[0]);
+            }
+            if (Number(i) >= 2) {
+              expect(masterkey).toEqual(usersIDs[1]);
+            }
+          }
+
+
+          const userAppSetSQL = `SELECT * FROM ${appSetAttribute.adapter.crossRelation}`;
+          const userAppSetResult = await connection.executeQuery(transaction, userAppSetSQL);
+
+          const [expectedAppID1, expectedAppID2, expectedAppID3] = userAppSetAttrValue1.refIDs;
+          const [[expectedAlias1], [expectedAlias2], [expectedAlias3]] = userAppSetAttrValue1.crossValues;
+
+          await userAppSetResult.next();
+          const userID1 = userAppSetResult.getNumber(Constants.DEFAULT_CROSS_PK_OWN_NAME);
+          const appID1 = userAppSetResult.getNumber(Constants.DEFAULT_CROSS_PK_REF_NAME);
+          const alias1 = userAppSetResult.getString("ALIAS");
+          expect(userID1).toBe(usersIDs[0]);
+          expect(appID1).toBe(expectedAppID1);
+          expect(alias1).toBe(expectedAlias1.value);
+
+          await userAppSetResult.next();
+          const userID2 = userAppSetResult.getNumber(Constants.DEFAULT_CROSS_PK_OWN_NAME);
+          const appID2 = userAppSetResult.getNumber(Constants.DEFAULT_CROSS_PK_REF_NAME);
+          const alias2 = userAppSetResult.getString("ALIAS");
+          expect(userID2).toBe(usersIDs[0]);
+          expect(appID2).toBe(expectedAppID2);
+          expect(alias2).toBe(expectedAlias2.value);
+
+          await userAppSetResult.next();
+          const userID3 = userAppSetResult.getNumber(Constants.DEFAULT_CROSS_PK_OWN_NAME);
+          const appID3 = userAppSetResult.getNumber(Constants.DEFAULT_CROSS_PK_REF_NAME);
+          const alias3 = userAppSetResult.getString("ALIAS");
+          expect(userID3).toBe(usersIDs[0]);
+          expect(appID3).toBe(expectedAppID3);
+          expect(alias3).toBe(expectedAlias3.value);
+
+          const [expectedAppID4, expectedAppID5] = userAppSetAttrValue2.refIDs;
+          const [[expectedAlias4], [expectedAlias5]] = userAppSetAttrValue2.crossValues;
+
+          await userAppSetResult.next();
+          const userID4 = userAppSetResult.getNumber(Constants.DEFAULT_CROSS_PK_OWN_NAME);
+          const appID4 = userAppSetResult.getNumber(Constants.DEFAULT_CROSS_PK_REF_NAME);
+          const alias4 = userAppSetResult.getString("ALIAS");
+          expect(userID4).toBe(usersIDs[1]);
+          expect(appID4).toBe(expectedAppID4);
+          expect(alias4).toBe(expectedAlias4.value);
+
+          await userAppSetResult.next();
+          const userID5 = userAppSetResult.getNumber(Constants.DEFAULT_CROSS_PK_OWN_NAME);
+          const appID5 = userAppSetResult.getNumber(Constants.DEFAULT_CROSS_PK_REF_NAME);
+          const alias5 = userAppSetResult.getString("ALIAS");
+          expect(userID5).toBe(usersIDs[1]);
+          expect(appID5).toBe(expectedAppID5);
+          expect(alias5).toBe(expectedAlias5.value);
+
+
+          const usersSQL = `SELECT * FROM ${userEntity.name}`;
+          const usersResult = await connection.executeQuery(transaction, usersSQL);
+
+          await usersResult.next();
+          const loginAttrValue1 = userInsert1.attrsValues[0] as IScalarAttrValue;
+          const expectedLogin1 = loginAttrValue1.value;
+          const login1 = usersResult.getString("LOGIN");
+          expect(login1).toBe(expectedLogin1);
+
+          await usersResult.next();
+          const loginAttrValue2 = userInsert2.attrsValues[0] as IScalarAttrValue;
+          const expectedLogin2 = loginAttrValue2.value;
+          const login2 = usersResult.getString("LOGIN");
+          expect(login2).toBe(expectedLogin2);
         }
       });
 

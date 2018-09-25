@@ -1,7 +1,7 @@
 import { AConnection } from "gdmn-db";
 import { ERBridge } from "../src/ERBridge";
 import { ERModel, MAX_16BIT_INT, MIN_16BIT_INT, Entity, IntegerAttribute, StringAttribute, TimeStampAttribute, EntityAttribute, SetAttribute, ScalarAttribute, DetailAttribute } from "gdmn-orm";
-import { IInsert, IValue, Scalar, Crud, ISetValue, IUpdateOrInsert, IDelete, } from "../src/crud/Crud";
+import { IInsert, Scalar, Crud, IUpdateOrInsert, IDelete, IScalarAttrValue, IEntityAttrValue, ISetAttrValue, IDetailAttrValue, } from "../src/crud/Crud";
 import { Constants } from "../src/ddl/Constants";
 
 export function testDelete(
@@ -19,146 +19,66 @@ export function testDelete(
       }
     });
 
-    it("Delete entity with SetsAttributes", async () => {
+    it("Delete", async () => {
       const erModel: ERModel = await initERModelBuilder(async (builder) => {
         const erModel = await builder.initERModel();
 
         const appEntity = await builder.addEntity(erModel, new Entity({
           name: "APPLICATION", lName: { ru: { name: "Приложение" } }
         }));
-
         await builder.entityBuilder.addAttribute(appEntity, new StringAttribute({
-          name: "UID", lName: { ru: { name: "Идентификатор приложения" } }, required: true,
-          minLength: 1, maxLength: 36
+          name: "UID", lName: { ru: { name: "Идентификатор приложения" } }, required: true, minLength: 1, maxLength: 36
         }));
         await builder.entityBuilder.addUnique(appEntity, [appEntity.attribute("UID")]);
 
-        await builder.entityBuilder.addAttribute(appEntity, new TimeStampAttribute({
-          name: "CREATIONDATE", lName: { ru: { name: "Дата создания" } }, required: true, defaultValue: "CURRENT_TIMESTAMP"
+        const backupEntity = await builder.addEntity(erModel, new Entity({
+          name: "APPLICATION_BACKUPS", lName: { ru: { name: "Бэкап" } }
         }));
+        await builder.entityBuilder.addAttribute(backupEntity, new StringAttribute({
+          name: "UID", lName: { ru: { name: "Идентификатор бэкапа" } }, required: true, minLength: 1, maxLength: 36
+        }));
+        await builder.entityBuilder.addUnique(backupEntity, [backupEntity.attribute("UID")]);
+        await builder.entityBuilder.addAttribute(backupEntity,
+          new EntityAttribute({
+            name: "APP", lName: { ru: { name: " " } }, required: true, entities: [appEntity]
+          })
+        );
+        await builder.entityBuilder.addAttribute(backupEntity, new StringAttribute({
+          name: "ALIAS", lName: { ru: { name: "Название бэкапа" } }, required: true, minLength: 1, maxLength: 120
+        }));
+
+        const placeEntity = await builder.addEntity(erModel, new Entity({ name: "PLACE", lName: { ru: { name: "Место" } } }));
+        await builder.entityBuilder.addAttribute(placeEntity, new StringAttribute({
+          name: "ADDRESS", lName: { ru: { name: "Адрес" } }, required: true, minLength: 1, maxLength: 100
+        }));
+
 
         const userEntity = await builder.addEntity(erModel, new Entity({
           name: "APP_USER", lName: { ru: { name: "Пользователь" } }
         }));
-
         const userLogin = await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
           name: "LOGIN", lName: { ru: { name: "Логин" } }, required: true, minLength: 1,
           maxLength: 32
         }));
-
         const appSet = new SetAttribute({
           name: "APPLICATIONS", lName: { ru: { name: "Приложения" } }, entities: [appEntity],
           adapter: { crossRelation: "APP_USER_APPLICATIONS" }
         });
-
         appSet.add(new StringAttribute({
           name: "ALIAS", lName: { ru: { name: "Название приложения" } }, required: true, minLength: 1, maxLength: 120
         }));
-
         await builder.entityBuilder.addAttribute(userEntity, appSet);
 
-        return erModel;
-      });
-
-      const userEntity = erModel.entity("APP_USER");
-      const appEntity = erModel.entity("APPLICATION");
-
-      const appUIDValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: appEntity.attribute("UID"),
-        value: "uniqueUID"
-      };
-      const appInsert: IInsert = {
-        entity: appEntity,
-        values: [appUIDValue]
-      };
-
-      const appID = await Crud.executeInsert(connection, appInsert);
-
-      const appSetAttribute: SetAttribute = userEntity.attribute("APPLICATIONS") as SetAttribute;
-      const appAliasAttribute: ScalarAttribute = appSetAttribute.attribute("ALIAS");
-      const appAliasValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: appAliasAttribute,
-        value: "appAlias"
-      };
-      const loginAttributeValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: userEntity.attribute("LOGIN"),
-        value: "imLogin"
-      };
-      const appSetValue: ISetValue = {
-        attribute: appSetAttribute,
-        setValues: [appAliasValue],
-        value: [appID]
-      };
-      const userInsert: IInsert = {
-        entity: userEntity,
-        values: [loginAttributeValue, appSetValue]
-      };
-      const userID = await Crud.executeInsert(connection, userInsert);
-
-      // TODO:
-      // when pk more than just id ???
-      // for example: primary keys for user must be [id, login]
-      const newAppAliasValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: appAliasAttribute,
-        value: "newAppAlias"
-      };
-      const newAppSetValue: ISetValue = {
-        attribute: appSetAttribute,
-        setValues: [newAppAliasValue],
-        value: [appID]
-      };
-      const userUpdateOrInsert: IUpdateOrInsert = {
-        pk: [userID],
-        entity: userEntity,
-        values: [loginAttributeValue, newAppSetValue]
-      };
-      await Crud.executeUpdateOrInsert(connection, userUpdateOrInsert);
-
-      const deleteUser: IDelete = {
-        pk: [userID],
-        entity: userEntity,
-      };
-
-      await Crud.executeDelete(connection, deleteUser);
-
-      await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT * FROM ${userEntity.name} WHERE ID = ${userID}`;
-          const userResult = await connection.executeQuery(transaction, sql);
-          const next = await userResult.next();
-          await userResult.close();
-          expect(next).toBeFalsy();
-
-        }
-      });
-
-    });
-
-    it("Delete entity with DetailAttriubute", async () => {
-      const erModel: ERModel = await initERModelBuilder(async (builder) => {
-        const erModel = await builder.initERModel();
-
-        const placeEntity = await builder.addEntity(erModel, new Entity({ name: "PLACE", lName: { ru: { name: "Место" } } }));
-        await builder.entityBuilder.addAttribute(placeEntity, new StringAttribute({
-          name: "ADDRESS", lName: { ru: { name: "Адрес" } }
+        await builder.entityBuilder.addAttribute(userEntity, new EntityAttribute({
+          name: "PLACE", lName: {}, entities: [placeEntity]
         }));
-
-        const userEntity = await builder.addEntity(erModel, new Entity({ name: "USER_ENTITY", lName: { ru: { name: "Пользователь" } } }));
-
-        await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
-          name: "NAME", lName: { ru: { name: "Имя пользователя" } }, required: true,
-          minLength: 1, maxLength: 36
-        }));
-        await builder.entityBuilder.addUnique(userEntity, [userEntity.attribute("NAME")]);
-
-        await builder.entityBuilder.addAttribute(userEntity, new EntityAttribute({ name: "PLACE", lName: {}, entities: [placeEntity] }));
-
         await builder.entityBuilder.addAttribute(userEntity, new DetailAttribute({
-          name: "DETAIL_PLACE", lName: { ru: { name: "Детальное место" } }, required: false, entities: [placeEntity], adapter: {
+          name: "DETAIL_PLACE", lName: { ru: { name: "Детальное место" } },
+          required: false, entities: [placeEntity],
+          adapter: {
             masterLinks: [{
               detailRelation: placeEntity.name,
-              link2masterField: "MASTER_KEY"
+              link2masterField: Constants.DEFAULT_MASTER_KEY_NAME
             }]
           }
         }));
@@ -166,86 +86,208 @@ export function testDelete(
         return erModel;
       });
 
-      const placeEntity = erModel.entity("PLACE");
-      const placeAddressAttribute = placeEntity.attribute("ADDRESS");
+      const appEntity = erModel.entity("APPLICATION");
 
-      const placeAddressValue1: IValue<ScalarAttribute, Scalar> = {
-        attribute: placeAddressAttribute,
+      const appUIDValue1: IScalarAttrValue = {
+        attribute: appEntity.attribute("UID"),
+        value: "uid1"
+      };
+      const app1: IInsert = {
+        entity: appEntity,
+        attrsValues: [appUIDValue1]
+      };
+
+      const appUIDValue2: IScalarAttrValue = {
+        attribute: appEntity.attribute("UID"),
+        value: "uid2"
+      };
+      const app2: IInsert = {
+        entity: appEntity,
+        attrsValues: [appUIDValue2]
+      };
+
+      const appUIDValue3: IScalarAttrValue = {
+        attribute: appEntity.attribute("UID"),
+        value: "uid3"
+      };
+      const app3: IInsert = {
+        entity: appEntity,
+        attrsValues: [appUIDValue3]
+      };
+
+      const apps = [app1, app2, app3];
+      const appIDs = await Crud.executeInsert(connection, apps);
+
+      const backupEntity = erModel.entity("APPLICATION_BACKUPS");
+
+      const appIDValue1: IEntityAttrValue = {
+        attribute: backupEntity.attribute("APP") as EntityAttribute,
+        values: [appIDs[0]]
+      };
+      const backupUIDValue1: IScalarAttrValue = {
+        attribute: backupEntity.attribute("UID"),
+        value: "uid1"
+      };
+      const backupAliasValue1: IScalarAttrValue = {
+        attribute: backupEntity.attribute("ALIAS"),
+        value: "alias1"
+      };
+      const insertBackup1: IInsert = {
+        entity: backupEntity,
+        attrsValues: [appIDValue1, backupUIDValue1, backupAliasValue1]
+      };
+      const appIDValue2: IEntityAttrValue = {
+        attribute: backupEntity.attribute("APP") as EntityAttribute,
+        values: [appIDs[1]]
+      };
+      const backupUIDValue2: IScalarAttrValue = {
+        attribute: backupEntity.attribute("UID"),
+        value: "uid2"
+      };
+      const backupAliasValue2: IScalarAttrValue = {
+        attribute: backupEntity.attribute("ALIAS"),
+        value: "alias2"
+      };
+      const insertBackup2: IInsert = {
+        entity: backupEntity,
+        attrsValues: [appIDValue2, backupUIDValue2, backupAliasValue2]
+      };
+
+      const backups = [insertBackup1, insertBackup2];
+      const backupsIDs = await Crud.executeInsert(connection, backups);
+
+
+      const placeEntity = erModel.entity("PLACE");
+
+      const placeAddressValue1: IScalarAttrValue = {
+        attribute: placeEntity.attribute("ADDRESS"),
         value: "address1"
       };
-      const placeInsert1: IInsert = {
+      const placeInsert1: IUpdateOrInsert = {
         entity: placeEntity,
-        values: [placeAddressValue1]
+        attrsValues: [placeAddressValue1]
       };
 
-      const place1ID = await Crud.executeInsert(connection, placeInsert1);
-
-      const placeAddressValue2: IValue<ScalarAttribute, Scalar> = {
-        attribute: placeAddressAttribute,
+      const placeAddressValue2: IScalarAttrValue = {
+        attribute: placeEntity.attribute("ADDRESS"),
         value: "address2"
       };
-      const placeInsert2: IInsert = {
+      const placeInsert2: IUpdateOrInsert = {
         entity: placeEntity,
-        values: [placeAddressValue2]
-      };
-      const place2ID = await Crud.executeInsert(connection, placeInsert2);
-
-      const userEntity = erModel.entity("USER_ENTITY");
-      const userNameAttr = userEntity.attribute("NAME");
-      const userNameValue: IValue<ScalarAttribute, Scalar> = {
-        attribute: userNameAttr,
-        value: "username"
+        attrsValues: [placeAddressValue2]
       };
 
-      const detailPlaceAttr = userEntity.attribute("DETAIL_PLACE") as DetailAttribute;
-      const placeValue: IValue<DetailAttribute, Scalar[][]> = {
-        attribute: detailPlaceAttr,
-        value: [[place1ID], [place2ID]]
+      const places = [placeInsert1, placeInsert2];
+      const placesIDs = await Crud.executeUpdateOrInsert(connection, places);
+
+      const userEntity = erModel.entity("APP_USER");
+      const appSetAttribute: SetAttribute = userEntity.attribute("APPLICATIONS") as SetAttribute;
+
+      const appAliasValue1: IScalarAttrValue = {
+        attribute: appSetAttribute.attribute("ALIAS"),
+        value: "alias1"
+      };
+      const appAliasValue2: IScalarAttrValue = {
+        attribute: appSetAttribute.attribute("ALIAS"),
+        value: "alias2"
+      };
+      const userAppSetAttrValue1: ISetAttrValue = {
+        attribute: appSetAttribute,
+        crossValues: [[appAliasValue1], [appAliasValue2]],
+        refIDs: [appIDs[0], appIDs[1]]
+      };
+      const userLoginAttrValue1: IScalarAttrValue = {
+        attribute: userEntity.attribute("LOGIN"),
+        value: "login1"
       };
 
-      const userInsert: IInsert = {
+      const userPlaceDetailAttrValue1: IDetailAttrValue = {
+        attribute: userEntity.attribute("DETAIL_PLACE") as DetailAttribute,
+        pks: [[placesIDs[0]], [placesIDs[1]]]
+      };
+
+      const user1: IUpdateOrInsert = {
         entity: userEntity,
-        values: [userNameValue, placeValue]
+        attrsValues: [userLoginAttrValue1, userAppSetAttrValue1, userPlaceDetailAttrValue1]
       };
 
-      const userID = await Crud.executeInsert(connection, userInsert);
+      const usersIDs = await Crud.executeInsert(connection, [user1]);
 
-      const placeAddressValue3: IValue<ScalarAttribute, Scalar> = {
-        attribute: placeAddressAttribute,
-        value: "address3"
-      };
-      const placeInsert3: IInsert = {
-        entity: placeEntity,
-        values: [placeAddressValue3]
-      };
-      const place3ID = await Crud.executeInsert(connection, placeInsert3);
 
       const userDelete: IDelete = {
-        pk: [userID],
+        pk: [usersIDs[0]],
         entity: userEntity
       };
 
-      await Crud.executeDelete(connection, userDelete);
+      await Crud.executeDelete(connection, [userDelete]);
+
+      const backupDelete1: IDelete = {
+        pk: [backupsIDs[0]],
+        entity: backupEntity
+      };
+      const backupDelete2: IDelete = {
+        pk: [backupsIDs[1]],
+        entity: backupEntity
+      };
+      const backupsDelete = [backupDelete1, backupDelete2];
+      await Crud.executeDelete(connection, backupsDelete);
 
       await AConnection.executeTransaction({
         connection,
         callback: async (transaction) => {
-          const sql = `SELECT * FROM ${userEntity.name} WHERE ID = ${userID}`;
-          const userResult = await connection.executeQuery(transaction, sql);
-          const next = await userResult.next();
-          await userResult.close();
-          expect(next).toBeFalsy();
-        }
-      });
 
-      await AConnection.executeTransaction({
-        connection,
-        callback: async (transaction) => {
-          const sql = `SELECT * FROM ${placeEntity.name} WHERE MASTER_KEY = ${userID}`;
-          const userResult = await connection.executeQuery(transaction, sql);
-          const next = await userResult.next();
-          await userResult.close();
-          expect(next).toBeFalsy();
+          const backupsSQL = `SELECT * FROM ${backupEntity.name} WHERE
+          ID = :backupID1 OR ID = :backupID2`;
+
+          const backupsIDParams = {
+            backupID1: backupsIDs[0],
+            backupID2: backupsIDs[1],
+          };
+
+          const backupsResult = await connection.executeQuery(
+            transaction,
+            backupsSQL,
+            backupsIDParams
+          );
+          expect(await backupsResult.next()).toBeFalsy();
+
+          const placesSQL = `SELECT * FROM ${placeEntity.name} WHERE
+                    ID = :placeID1 OR ID = :placeID2`;
+          const placesIDParams = {
+            placeID1: placesIDs[0],
+            placeID2: placesIDs[1],
+          };
+
+          const placesResult = await connection.executeQuery(
+            transaction,
+            placesSQL,
+            placesIDParams
+          );
+
+          await placesResult.next();
+          const address1 = placesResult.getString("ADDRESS");
+          const expectedAddress1 = places[0].attrsValues[0] as IScalarAttrValue;
+          expect(address1).toEqual(expectedAddress1.value);
+          const masterKey1 = placesResult.getString(Constants.DEFAULT_MASTER_KEY_NAME);
+          const expectedMasterKey1 = "";
+          expect(masterKey1).toEqual(expectedMasterKey1);
+
+          await placesResult.next();
+          const address2 = placesResult.getString("ADDRESS");
+          const expectedAddress2 = places[1].attrsValues[0] as IScalarAttrValue;
+          expect(address2).toEqual(expectedAddress2.value);
+          const masterKey2 = placesResult.getString(Constants.DEFAULT_MASTER_KEY_NAME);
+          const expectedMasterKey2 = "";
+          expect(masterKey2).toEqual(expectedMasterKey2);
+
+
+          const userAppSetSQL = `SELECT * FROM ${appSetAttribute.adapter.crossRelation}`;
+          const userAppSetResult = await connection.executeQuery(transaction, userAppSetSQL);
+          expect(await userAppSetResult.next()).toBeFalsy();
+
+          const userSQL = `SELECT * FROM ${userEntity.name}`;
+          const userResult = await connection.executeQuery(transaction, userSQL);
+          expect(await userResult.next()).toBeFalsy();
         }
       });
 
