@@ -1,5 +1,7 @@
 import { ScalarAttribute, SetAttribute, DetailAttribute, EntityAttribute } from "gdmn-orm";
-import { IAttrsValuesByType, AttrsValues, IScalarAttrValue, ISetAttrValue, IDetailAttrValue, IEntityAttrValue } from "./Crud";
+import { IAttrsValuesByType, AttrsValues, IScalarAttrValue, ISetAttrValue, IDetailAttrValue, IEntityAttrValue, Step, Scalar } from "./Crud";
+import { Constants } from "../ddl/Constants";
+import _ from "lodash";
 
 export function groupAttrsValuesByType(attrsValues: AttrsValues) {
 
@@ -48,3 +50,90 @@ export function groupAttrsValuesByType(attrsValues: AttrsValues) {
 
   }, byType);
 };
+
+
+export function makeDetailAttrsSteps(masterKeyValue: number,
+  detailAttrsValues: IDetailAttrValue[]): Step[] {
+
+  const steps = detailAttrsValues.map(currDetailAttrValues => {
+    const currDetailAttr = currDetailAttrValues.attribute;
+    const [detailEntity] = currDetailAttr.entities;
+
+    const detailRelation = currDetailAttr.adapter ?
+      currDetailAttr.adapter.masterLinks[0].detailRelation :
+      detailEntity.attribute.name;
+
+    const link2masterField = currDetailAttr.adapter ?
+      currDetailAttr.adapter.masterLinks[0].link2masterField :
+      Constants.DEFAULT_MASTER_KEY_NAME;
+
+
+    const parts = currDetailAttrValues.pks.map((pk: Scalar[], pkIndex) => {
+
+      const pKeyNames = detailEntity.pk.map(k => k.name);
+      const sqlPart = pKeyNames
+        .map(name => `${name} = :${name}${pkIndex}`)
+        .join(" AND ");
+
+      const params = pKeyNames.reduce((acc, currName, currIndex) => {
+        return { ...acc, [`${currName}${pkIndex}`]: pk[currIndex] };
+      }, {});
+
+      return { sqlPart, params };
+    });
+
+    const whereParams = parts.reduce((acc, part) => {
+      return { ...acc, ...part.params };
+    }, {});
+    const whereSQL = parts.map(part => part.sqlPart).join(" OR ");
+
+    const sql = `UPDATE ${detailRelation} SET ${link2masterField} = (${masterKeyValue}) WHERE ${whereSQL}`;
+    const step = { sql, params: whereParams };
+    return step;
+  });
+
+  return steps;
+}
+
+
+export function makeSetAttrsSteps(makeSQL: (tableName: string, attrsNames: string[], placeholders: string[]) => string, crossPKOwn: number, setAttrsValues: ISetAttrValue[]): Step[] {
+
+  const steps = setAttrsValues.map(currSetAttrValue => {
+
+    const { crossValues, refIDs } = currSetAttrValue;
+
+    const innerSteps = refIDs.map((currRefID, index) => {
+
+      const currValues = crossValues[index] || [];
+
+      const restCrossAttrsParams = currValues.reduce((acc, curr: IScalarAttrValue) => {
+        return { ...acc, [curr.attribute.name]: curr.value };
+      }, {});
+
+      const params = {
+        [Constants.DEFAULT_CROSS_PK_OWN_NAME]: crossPKOwn,
+        [Constants.DEFAULT_CROSS_PK_REF_NAME]: currRefID,
+        ...restCrossAttrsParams
+      };
+
+      const attrsNames = Object.keys(params);
+      const placeholders = attrsNames.map(name => `:${name}`);
+
+      let crossTableName;
+      if (currSetAttrValue.attribute.adapter) {
+        crossTableName = currSetAttrValue.attribute.adapter.crossRelation;
+      } else {
+        crossTableName = currSetAttrValue.attribute.name;
+      }
+
+      const sql = makeSQL(crossTableName, attrsNames, placeholders);
+      const step = { sql, params };
+      return step;
+    });
+
+    return innerSteps;
+  });
+
+  const flatten = _.flatten(steps);
+  return flatten;
+}

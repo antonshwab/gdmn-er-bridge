@@ -1,19 +1,10 @@
-import { Step, IUpdate, Scalar, IScalarAttrValue, IEntityAttrValue, ISetAttrValue, IDetailAttrValue } from "./Crud";
+import { Step, IUpdate, IScalarAttrValue, IEntityAttrValue, ISetAttrValue } from "./Crud";
 import { Entity } from "gdmn-orm";
 import { Constants } from "../ddl/Constants";
-import { groupAttrsValuesByType } from "./common";
+import { groupAttrsValuesByType, makeDetailAttrsSteps } from "./common";
 import _ from "lodash";
 
 export function buildUpdateSteps(input: IUpdate): Step[] {
-  // const { pk, entity, values } = input;
-
-  // const { scalars, entities, sets, details } = groupAttrsValuesByType(values);
-  // const scalarsEntitiesSteps = makeScalarsEntitiesSteps(entity, pk, scalars,
-  //   entities);
-  // const setsSteps = makeSetsSteps(pk, sets);
-  // const detailsSteps = makeDetailsSteps(pk, details);
-  // const steps = [...scalarsEntitiesSteps, ...setsSteps, ...detailsSteps];
-
   const { entity, attrsValues } = input;
   const pk = input.pk;
 
@@ -30,7 +21,6 @@ export function buildUpdateSteps(input: IUpdate): Step[] {
   const detailsSteps = makeDetailAttrsSteps(pk[0], detailAttrsValues);
   const steps = [...scalarsAndEntitiesSteps, ...setsSteps, ...detailsSteps];
 
-  console.log("steps for update :", steps);
   return steps;
 }
 
@@ -56,8 +46,8 @@ function makeScalarsAndEntitiesSteps(
     return [];
   }
 
-  // TODO: Consider other primary keys
-  // How with complex primary keys?
+  // TODO:
+  // with complex primary keys?
   const pkNames = entity.pk.map(key => key.adapter.field);
   const pkParams = pkNames.reduce((acc, curr, currIndex) => {
     return {
@@ -81,7 +71,6 @@ function makeScalarsAndEntitiesSteps(
     ...scalarAttrsNames,
     ...entityAttrsNames
   ];
-  // const placeholders = names.map(name => `:${name}`);
   const sql = makeUpdateSQL(entity.name, attrsNames, pkNames);
   // TODO: sql always the same, this is space for optimization.
   const steps = [{ sql, params }];
@@ -91,7 +80,7 @@ function makeScalarsAndEntitiesSteps(
 
 function makeSetAttrsSteps(crossPKOwn: number, setAttrsValues: ISetAttrValue[]): Step[] {
 
-  const steps = setAttrsValues.map(currSetAttrValue => {
+  const flatten = _.flatten(setAttrsValues.map(currSetAttrValue => {
 
     const { crossValues, refIDs } = currSetAttrValue;
 
@@ -101,17 +90,13 @@ function makeSetAttrsSteps(crossPKOwn: number, setAttrsValues: ISetAttrValue[]):
       throw new Error("ISetAttrValue must provide currRefIDs for Update operation");
     }
 
-    // TODO: use zip
-    // [(crossPKOwn, currRefID, refID, currValues)] ~~~> step[]
-    const innerSteps = refIDs.map((refID, index) => {
+    const innerSteps = _.zip(refIDs, currRefIDs, crossValues).map(([refID, currRefID, currValues]) => {
 
-      const currValues = crossValues[index];
-      const restCrossAttrsParams = currValues.reduce((acc, curr: IScalarAttrValue) => {
+      const currCrossValues = currValues || [];
+
+      const restCrossAttrsParams = currCrossValues.reduce((acc, curr: IScalarAttrValue) => {
         return { ...acc, [curr.attribute.name]: curr.value };
       }, {});
-
-      // const [refID] = refIDs;
-      const currRefID = currRefIDs[index];
 
       const setPartParams = {
         [Constants.DEFAULT_CROSS_PK_REF_NAME]: refID,
@@ -145,61 +130,12 @@ function makeSetAttrsSteps(crossPKOwn: number, setAttrsValues: ISetAttrValue[]):
       const step = { sql, params };
 
       return step;
+
     });
 
     return innerSteps;
 
-  });
+  }));
 
-  const flatten = _.flatten(steps);
-  console.log("SetAttrsSteps: ", flatten);
   return flatten;
-}
-
-
-// similiar to udpate's or insert'ths makedetailattrssteps
-function makeDetailAttrsSteps(masterKeyValue: number,
-  detailAttrsValues: IDetailAttrValue[]): Step[] {
-
-  const detailsSteps = detailAttrsValues.map(currDetailAttrValues => {
-
-    const currDetailAttr = currDetailAttrValues.attribute;
-    const [detailEntity] = currDetailAttr.entities;
-
-    const detailRelation = currDetailAttr.adapter ?
-      currDetailAttr.adapter.masterLinks[0].detailRelation :
-      detailEntity.attribute.name;
-
-    const link2masterField = currDetailAttr.adapter ?
-      currDetailAttr.adapter.masterLinks[0].link2masterField :
-      Constants.DEFAULT_MASTER_KEY_NAME;
-
-    const parts = currDetailAttrValues.pks.map((pk: Scalar[], pkIndex) => {
-
-      const pKeyNames = detailEntity.pk.map(k => k.name);
-      const sql = pKeyNames
-        .map(name => `${name} = :${name}${pkIndex}`)
-        .join(" AND ");
-
-      const params = pKeyNames.reduce((acc, currName, currIndex) => {
-        return { ...acc, [`${currName}${pkIndex}`]: pk[currIndex] };
-      }, {});
-
-      return { sql, params };
-    });
-
-    const whereParams = parts.reduce((acc, part) => {
-      return { ...acc, ...part.params };
-    }, {});
-
-    const whereSQL = parts.map(part => part.sql).join(" OR ");
-
-    const sql = `UPDATE ${detailRelation} SET ${link2masterField} = (${masterKeyValue}) WHERE ${whereSQL}`;
-
-    const step = { sql, params: whereParams };
-    return step;
-  });
-
-  console.log("details steps: (update)", detailsSteps);
-  return detailsSteps;
 }

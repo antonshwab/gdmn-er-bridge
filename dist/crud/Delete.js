@@ -48,7 +48,6 @@ function buildDeleteSteps(input) {
         return { sql, params };
     });
     const steps = [...cascadeSetSteps, ...cascadeDetailSteps, mainStep];
-    console.log("Delete steps: ", steps);
     return steps;
 }
 exports.buildDeleteSteps = buildDeleteSteps;

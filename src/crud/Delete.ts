@@ -60,6 +60,5 @@ export function buildDeleteSteps(input: IDelete): Step[] {
   });
 
   const steps = [...cascadeSetSteps, ...cascadeDetailSteps, mainStep];
-  console.log("Delete steps: ", steps);
   return steps;
 }

@@ -265,6 +265,7 @@ export function testUpdate(connection: AConnection, initERModelBuilder): void {
       await AConnection.executeTransaction({
         connection,
         callback: async (transaction) => {
+
           const backupsSQL = `SELECT * FROM ${backupEntity.name} WHERE
 ID = :backupID1 OR ID = :backupID2`;
 

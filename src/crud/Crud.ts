@@ -71,7 +71,7 @@ export interface IDelete {
 
 export type Step = { sql: string, params: {} };
 
-async function executeNestedSteps(
+async function runPrepNestedSteps(
   connection: AConnection,
   transaction: ATransaction,
   nestedSteps: Step[][]): Promise<void> {
@@ -89,63 +89,14 @@ async function executeNestedSteps(
 
 export abstract class Crud {
 
-  // private static async run(connection: AConnection, steps: Step[]): Promise<void> {
-  //   await AConnection.executeTransaction({
-  //     connection,
-  //     callback: async (transaction) => {
-  //       for (const { sql, params } of steps) {
-  //         await connection.executeReturning(
-  //           transaction,
-  //           sql,
-  //           params
-  //         );
-  //       }
-  //     },
-  //   });
-  // }
-
-  // private static async returningRun(connection: AConnection, steps: Array<Step | setsThunk | detailsThunk>): Promise<number> {
-
-  //   const [returningStep, ...thunks] = steps;
-
-  //   const result = await AConnection.executeTransaction({
-  //     connection,
-  //     callback: async (transaction) => {
-  //       const { sql, params } = returningStep as Step;
-  //       const result = await connection.executeReturning(transaction, sql, params);
-  //       return result;
-  //     }
-  //   });
-
-  //   const id = result.getNumber("ID");
-
-  //   const normalized = (thunks as Array<setsThunk | detailsThunk>)
-  //     .reduce((acc: Step[], thunk) => {
-  //       return [...acc, ...thunk(id)]
-  //     }, []);
-
-  //   await AConnection.executeTransaction({
-  //     connection,
-  //     callback: async (transaction) => {
-  //       for (const { sql, params } of normalized) {
-  //         await connection.execute(transaction, sql, params);
-  //       }
-  //     }
-  //   });
-
-  //   return id;
-  // }
-
   public static async executeInsert(
     connection: AConnection,
     input: IInsert | Array<IInsert>
   ): Promise<number[]> {
 
-    // normalize input
-    const insertDatoms = Array.isArray(input) ? input : [input];
-    // build steps
-    const nestedSteps = insertDatoms.map(d => buildInsertSteps(d));
-    // run steps
+    const datoms = Array.isArray(input) ? input : [input];
+
+    const nestedSteps = datoms.map(d => buildInsertSteps(d));
 
     const returningSteps = nestedSteps.map(({ returningStep }) => returningStep);
     const returningSQL = returningSteps[0].sql;
@@ -164,11 +115,10 @@ export abstract class Crud {
         );
 
         const setsNestedSteps = nestedSteps.map(({ setAttrsValuesThunk }, currIndex) => setAttrsValuesThunk(ids[currIndex]));
-        await executeNestedSteps(connection, transaction, setsNestedSteps);
+        await runPrepNestedSteps(connection, transaction, setsNestedSteps);
 
         const detailsNestedSteps = nestedSteps.map(({ detailAttrsValuesThunk }, currIndex) => detailAttrsValuesThunk(ids[currIndex]));
-        console.log("detailsNestedSteps: ", detailsNestedSteps);
-        await executeNestedSteps(connection, transaction, detailsNestedSteps);
+        await runPrepNestedSteps(connection, transaction, detailsNestedSteps);
 
         return ids;
       }
@@ -181,18 +131,12 @@ export abstract class Crud {
     connection: AConnection,
     input: IUpdateOrInsert | Array<IUpdateOrInsert>): Promise<Array<number>> {
 
-    // ==================
-    // NORMALIZE:
-    const insertOrUpdateDatoms = Array.isArray(input) ? input : [input];
+    const datoms = Array.isArray(input) ? input : [input];
 
-    // PREPARE to BUILD STEPS:
-    const datomsWithPK = insertOrUpdateDatoms.filter(d => d.pk);
-
-    // BUILD and RUN  STEPS for withPK part
+    const datomsWithPK = datoms.filter(d => d.pk);
     const nestedSteps = datomsWithPK.map(d => buildUpdateOrInsertSteps(d));
-
-    console.log("nestedSteps: ", nestedSteps);
     const flattenSteps = _.flatten(nestedSteps);
+
     await AConnection.executeTransaction({
       connection,
       callback: async (transaction) => {
@@ -206,8 +150,7 @@ export abstract class Crud {
       },
     });
 
-    // BUILD and RUN STEPS for withoutPK part
-    const datomsWithoutPK = insertOrUpdateDatoms.filter(d => !d.pk);
+    const datomsWithoutPK = datoms.filter(d => !d.pk);
     if (datomsWithoutPK.length > 0) {
       const ids = await Crud.executeInsert(connection, datomsWithoutPK as IInsert[]);
       return ids;
@@ -221,13 +164,11 @@ export abstract class Crud {
     input: IUpdate | IUpdate[]
   ): Promise<void> {
 
-    // NORMALIZE:
     const datoms = Array.isArray(input) ? input : [input];
 
-    // BUILD and RUN STEPS
     const nestedSteps = datoms.map(d => buildUpdateSteps(d));
-    console.log("BUILD UPDATE STEPS: ", nestedSteps);
     const flattenSteps = _.flatten(nestedSteps);
+
     await AConnection.executeTransaction({
       connection,
       callback: async (transaction) => {
@@ -247,13 +188,11 @@ export abstract class Crud {
     input: IDelete | IDelete[]
   ): Promise<void> {
 
-    // NORMALIZE
     const datoms = Array.isArray(input) ? input : [input];
 
-    // BUILD AND RUN STEPS
     const nestedSteps = datoms.map(d => buildDeleteSteps(d));
-    console.log("delete steps: ", nestedSteps);
     const flattenSteps = _.flatten(nestedSteps);
+
     await AConnection.executeTransaction({
       connection,
       callback: async (transaction) => {

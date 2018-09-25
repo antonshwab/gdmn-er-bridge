@@ -61,14 +61,14 @@ describe("ERBridge", () => {
     await erBridge.initDatabase();
   });
 
-  afterEach(async () => {
-    await connection.dropDatabase();
-  });
+  // afterEach(async () => {
+  //   await connection.dropDatabase();
+  // });
 
-  testInsert(connection, initERModelBuilder);
-  testUpdateOrInsert(connection, initERModelBuilder);
+  // testInsert(connection, initERModelBuilder);
+  // testUpdateOrInsert(connection, initERModelBuilder);
   testUpdate(connection, initERModelBuilder);
-  testDelete(connection, initERModelBuilder);
+  // testDelete(connection, initERModelBuilder);
 
   // it("empty entity", async () => {
   //   const erModel = await initERModelBuilder(async (builder) => {

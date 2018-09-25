@@ -335,17 +335,30 @@ export function testInsert(
             appsIDParams
           );
 
-          for (const i in appIDs) {
-            // console.log("i: ", i);
-            await appsResult.next();
-            const insertedUID = appsResult.getString("UID");
-            // console.log("insertedUID: ", insertedUID);
+          await appsResult.next();
+          const insertedAppUID1 = appsResult.getString("UID");
+          const [expectedAppUID1] = apps[0].attrsValues as IScalarAttrValue[];
+          expect(insertedAppUID1).toEqual(expectedAppUID1.value);
 
-            const [expectedUID] = apps[i].attrsValues as IScalarAttrValue[];
-            // console.log("expectedUID: ", expectedUID);
+          await appsResult.next();
+          const insertedAppUID2 = appsResult.getString("UID");
+          const [expectedAppUID2] = apps[1].attrsValues as IScalarAttrValue[];
+          expect(insertedAppUID2).toEqual(expectedAppUID2.value);
 
-            expect(insertedUID).toEqual(expectedUID.value);
-          }
+          await appsResult.next();
+          const insertedAppUID3 = appsResult.getString("UID");
+          const [expectedAppUID3] = apps[2].attrsValues as IScalarAttrValue[];
+          expect(insertedAppUID3).toEqual(expectedAppUID3.value);
+
+          await appsResult.next();
+          const insertedAppUID4 = appsResult.getString("UID");
+          const [expectedAppUID4] = apps[3].attrsValues as IScalarAttrValue[];
+          expect(insertedAppUID4).toEqual(expectedAppUID4.value);
+
+          await appsResult.next();
+          const insertedAppUID5 = appsResult.getString("UID");
+          const [expectedAppUID5] = apps[4].attrsValues as IScalarAttrValue[];
+          expect(insertedAppUID5).toEqual(expectedAppUID5.value);
 
           const backupsSQL = `SELECT * FROM ${backupEntity.name} WHERE
           ID = :backupID1 OR ID = :backupID2 OR ID = :backupID3`;
@@ -374,7 +387,6 @@ export function testInsert(
             expect(insertedUID).toEqual(expectedBackupUID.value);
             expect(insertedAlias).toEqual(expectedBackupAlias.value);
           }
-
 
           const placesSQL = `SELECT * FROM ${placeEntity.name} WHERE
           ID = :placeID1 OR ID = :placeID2 OR ID = :placeID3 OR ID = :placeID4 OR ID = :placeID5`;
